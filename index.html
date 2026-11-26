@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KM-Reader Studio — Academic Research &amp; Literature Review Workspace</title>
+  
+  <!-- Synchronous SVG Favicon with crimson-to-indigo KM emblem -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='km' x1='0' y1='0' x2='64' y2='64' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%23dc2626'/%3E%3Cstop offset='52%25' stop-color='%23e11d48'/%3E%3Cstop offset='100%25' stop-color='%234338ca'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23km)'/%3E%3Ctext x='30' y='38' text-anchor='middle' fill='%23ffffff' font-family='sans-serif' font-weight='800' font-size='22'%3EKM%3C/text%3E%3Ccircle cx='49' cy='15' r='5' fill='%23fde047'/%3E%3C/svg%3E" />
+  
+  <!-- Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <!-- PDF.js & PDF-Lib Engines -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  
+  <!-- Custom Dark Slate & Optical Layer Styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="flex flex-col h-screen w-screen bg-[#111114] text-zinc-100 select-none">
+
+  <!-- ==================== TOP BROWSER CHROME BAR (#111114) ==================== -->
+  <header class="h-11 bg-[#111114] border-b border-zinc-800/90 px-3 flex items-center justify-between gap-2 shrink-0 z-30">
+    <!-- Left: Brand Emblem + Open PDF Tabs + Open PDF Button -->
+    <div class="flex items-center gap-2 min-w-0 flex-1">
+      <div class="flex items-center gap-2 pr-2.5 border-r border-zinc-800 shrink-0">
+        <svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="rounded-lg shadow-md shrink-0">
+          <defs>
+            <linearGradient id="kmGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#dc2626" />
+              <stop offset="52%" stop-color="#e11d48" />
+              <stop offset="100%" stop-color="#4338ca" />
+            </linearGradient>
+          </defs>
+          <rect width="64" height="64" rx="14" fill="url(#kmGrad)" />
+          <path d="M12 45C18 42.5 25 43 32 46.5C39 43 46 42.5 52 45V48.5C46 46 39 46.5 32 50C25 46.5 18 46 12 48.5V45Z" fill="#ffffff" fill-opacity="0.92" />
+          <text x="30" y="37" text-anchor="middle" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5">KM</text>
+          <path d="M50 9L52.2 14.8L58 17L52.2 19.2L50 25L47.8 19.2L42 17L47.8 14.8L50 9Z" fill="#fde047" />
+        </svg>
+        <span class="font-bold text-xs tracking-tight text-zinc-100 hidden sm:inline">KM-Reader <span class="text-indigo-400 font-semibold">Studio</span></span>
+      </div>
+
+      <!-- Open PDF Tabs Bar -->
+      <div id="tabBar" class="flex items-center gap-1 overflow-x-auto min-w-0 py-1"></div>
+
+      <button id="openPdfTopBtn" type="button" onclick="window.triggerOpenPdf && window.triggerOpenPdf()" class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700/80 transition cursor-pointer">
+        <i class="ph-bold ph-plus text-indigo-400"></i>
+        <span>Open PDF</span>
+      </button>
+      <input id="pdfFileInput" type="file" accept="application/pdf" multiple class="hidden" />
+    </div>
+
+    <!-- Right: Privacy/About, Gemini Status Pill & Ask AI Assistant Toggle -->
+    <div class="flex items-center gap-2 shrink-0">
+      <button id="openPrivacyModalBtn" type="button" title="About &amp; Local Privacy Policy" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
+        <i class="ph-bold ph-shield-check text-emerald-400"></i>
+        <span class="hidden md:inline">Privacy &amp; About</span>
+      </button>
+
+      <button id="openApiSettingsBtn" type="button" onclick="window.openApiSettingsModal && window.openApiSettingsModal()" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
+        <span id="apiStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+        <span id="activeModelBadge" class="max-w-[145px] truncate">Gemini 3.5 Flash-Lite</span>
+      </button>
+
+      <button id="toggleAiSidebarBtn" type="button" onclick="window.toggleAiSidebar && window.toggleAiSidebar()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-rose-600 via-indigo-600 to-violet-600 hover:brightness-110 text-white text-xs font-semibold shadow transition cursor-pointer">
+        <i class="ph-fill ph-sparkle text-amber-300"></i>
+        <span>Ask AI Assistant</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== UTILITY & SYNTHESIS TOOLBAR (#18181d) ==================== -->
+  <div class="h-10 bg-[#18181d] border-b border-zinc-800/90 px-3 flex items-center justify-between gap-2 shrink-0 z-20 overflow-x-auto">
+    <!-- Left Actions: 1-Click Auto Matrix, Lit Matrix [N], Save PDF -->
+    <div class="flex items-center gap-2 shrink-0">
+      <button id="autoMatrixBtn" type="button" onclick="window.runAutoMatrixForPaper && window.runAutoMatrixForPaper()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition cursor-pointer">
+        <i class="ph-fill ph-sparkle text-amber-300"></i>
+        <span>1-Click Auto Matrix</span>
+      </button>
+
+      <button id="openMatrixModalBtn" type="button" onclick="window.openMatrixModal && window.openMatrixModal()" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#222228] hover:bg-zinc-700 text-zinc-100 text-xs font-semibold border border-zinc-700/80 transition cursor-pointer">
+        <i class="ph-bold ph-table text-emerald-400"></i>
+        <span>Lit Matrix</span>
+        <span id="matrixCountBadge" class="px-1.5 py-0.2 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold">0</span>
+      </button>
+
+      <button id="saveAnnotatedPdfBtn" type="button" onclick="window.saveAnnotatedPdf && window.saveAnnotatedPdf()" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#222228] hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/80 transition cursor-pointer">
+        <i class="ph-bold ph-floppy-disk text-sky-400"></i>
+        <span>Save PDF</span>
+      </button>
+    </div>
+
+    <!-- Center: Find in PDF Search -->
+    <div class="flex items-center gap-1 bg-[#121216] border border-zinc-800 rounded-lg px-2 py-0.5 shrink-0">
+      <i class="ph ph-magnifying-glass text-zinc-400 text-xs"></i>
+      <input id="pdfSearchInput" type="text" placeholder="Find in PDF..." class="bg-transparent text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none w-32 sm:w-44" />
+      <span id="searchCounter" class="text-[10px] text-zinc-400 font-mono px-1">0/0</span>
+      <button id="searchPrevBtn" type="button" title="Previous match" class="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer">
+        <i class="ph-bold ph-caret-up text-[11px]"></i>
+      </button>
+      <button id="searchNextBtn" type="button" title="Next match" class="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer">
+        <i class="ph-bold ph-caret-down text-[11px]"></i>
+      </button>
+    </div>
+
+    <!-- Right: Reading Surface Theme Pills -->
+    <div class="flex items-center gap-1 bg-[#121216] border border-zinc-800 rounded-lg p-0.5 text-[11px] shrink-0">
+      <button id="themeDarkBtn" type="button" data-surface="dark" class="surface-theme-btn px-2 py-0.5 rounded-md bg-zinc-700 text-white font-semibold transition cursor-pointer">Dark</button>
+      <button id="themeSepiaBtn" type="button" data-surface="sepia" class="surface-theme-btn px-2 py-0.5 rounded-md text-zinc-400 hover:text-zinc-200 transition cursor-pointer">Sepia</button>
+      <button id="themeLightBtn" type="button" data-surface="light" class="surface-theme-btn px-2 py-0.5 rounded-md text-zinc-400 hover:text-zinc-200 transition cursor-pointer">Light</button>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN WORKSPACE BODY ==================== -->
+  <div class="flex-1 flex min-h-0 relative overflow-hidden bg-[#121216]">
+
+    <!-- LEFT FLOATING TOOL DOCK (#leftToolDock) -->
+    <aside id="leftToolDock" class="fixed left-4 top-1/2 -translate-y-1/2 z-20 bg-[#18181d]/95 backdrop-blur-md border border-zinc-700/80 rounded-2xl p-1.5 shadow-2xl flex flex-col items-center gap-1.5">
+      <button id="toolSelectBtn" type="button" data-tool="select" title="Select Text (Syncs Quote to AI)" class="dock-tool-btn w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center transition cursor-pointer">
+        <i class="ph-bold ph-cursor text-base"></i>
+      </button>
+
+      <!-- Quick Highlight Tool + Active Color Selector -->
+      <div class="relative group">
+        <button id="toolHighlightBtn" type="button" data-tool="highlight" title="Quick Highlight Tool" class="dock-tool-btn w-9 h-9 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center transition relative cursor-pointer">
+          <i class="ph-bold ph-highlighter-circle text-base"></i>
+          <span id="dockActiveCatDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 absolute bottom-1 right-1 ring-1 ring-zinc-900"></span>
+        </button>
+        <div class="hidden group-hover:flex flex-col gap-1 absolute left-11 top-0 bg-[#18181d] border border-zinc-700 rounded-xl p-2 shadow-2xl w-44 z-30">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1.5 pb-1 border-b border-zinc-800">Highlight Category</div>
+          <button type="button" data-cat="objective" class="dock-cat-btn flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-xs text-left text-zinc-200 cursor-pointer">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Objective
+          </button>
+          <button type="button" data-cat="methodology" class="dock-cat-btn flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-xs text-left text-zinc-200 cursor-pointer">
+            <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span> Methodology
+          </button>
+          <button type="button" data-cat="finding" class="dock-cat-btn flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-xs text-left text-zinc-200 cursor-pointer">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Findings
+          </button>
+          <button type="button" data-cat="limitation" class="dock-cat-btn flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-xs text-left text-zinc-200 cursor-pointer">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span> Limitations
+          </button>
+          <button type="button" data-cat="citation" class="dock-cat-btn flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-xs text-left text-zinc-200 cursor-pointer">
+            <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span> Citation
+          </button>
+        </div>
+      </div>
+
+      <button id="toolNoteBtn" type="button" data-tool="note" title="Add Sticky Note" class="dock-tool-btn w-9 h-9 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center transition cursor-pointer">
+        <i class="ph-bold ph-note-pencil text-base"></i>
+      </button>
+
+      <div class="w-5 h-px bg-zinc-700/80 my-0.5"></div>
+
+      <button id="clearPageHighlightsBtn" type="button" title="Clear Current Page Highlights" class="w-9 h-9 rounded-xl text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 flex items-center justify-center transition cursor-pointer">
+        <i class="ph-bold ph-eraser text-base"></i>
+      </button>
+    </aside>
+
+    <!-- MAIN PDF VIEWPORT (#pdfViewportContainer) -->
+    <main id="pdfViewportContainer" class="flex-1 relative bg-[#121216] overflow-y-auto overflow-x-auto p-6 flex flex-col items-center">
+
+      <!-- EMPTY STATE WELCOME CARD (#emptyStateCard) -->
+      <div id="emptyStateCard" class="my-auto max-w-lg w-full bg-[#18181d] border border-zinc-800 rounded-3xl p-8 text-center shadow-2xl">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-rose-600 via-pink-600 to-indigo-700 flex items-center justify-center shadow-lg">
+          <span class="text-white font-extrabold text-2xl tracking-tight">KM</span>
+        </div>
+        <h1 class="text-xl font-bold text-white mb-2">KM-Reader Studio</h1>
+        <p class="text-xs text-zinc-400 leading-relaxed mb-5">
+          Open your academic research PDFs and click <strong class="text-indigo-300">1-Click Auto Matrix</strong> to extract Objectives, Methodology, Findings, Limitations &amp; Citations with 100% synchronized <span class="text-indigo-400 font-bold">[1]–[10]</span> in-text highlights.
+        </p>
+
+        <div class="flex flex-wrap items-center justify-center gap-1.5 mb-6 text-[11px] font-semibold">
+          <span class="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">Objective</span>
+          <span class="px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">Methodology</span>
+          <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Findings</span>
+          <span class="px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">Limitations</span>
+          <span class="px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">Citation</span>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+          <button id="emptyOpenPdfBtn" type="button" onclick="window.triggerOpenPdf && window.triggerOpenPdf()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow transition cursor-pointer">
+            <i class="ph-bold ph-file-pdf"></i>
+            <span>Open Academic PDF</span>
+          </button>
+          <button id="loadSamplePaperBtn" type="button" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer">
+            <i class="ph-fill ph-sparkle"></i>
+            <span>Try Sample Paper</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- MULTI-PAGE PDF RENDERER (#pdfPagesContainer) -->
+      <div id="pdfPagesContainer" class="hidden w-full flex flex-col items-center pb-16"></div>
+
+      <!-- FLOATING RIGHT ZOOM & PAGE RAIL (#floatingZoomRail) -->
+      <div id="floatingZoomRail" class="hidden fixed right-4 lg:right-[395px] top-1/2 -translate-y-1/2 z-20 bg-[#18181d]/95 backdrop-blur-md border border-zinc-700/80 rounded-2xl p-1.5 shadow-2xl flex flex-col items-center gap-1 text-xs transition-all">
+        <button id="zoomInBtn" type="button" title="Zoom In" class="w-8 h-8 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-plus"></i>
+        </button>
+        <span id="zoomPercentLabel" class="text-[10px] font-bold text-zinc-200 py-0.5">125%</span>
+        <button id="zoomOutBtn" type="button" title="Zoom Out" class="w-8 h-8 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-minus"></i>
+        </button>
+        <button id="fitWidthBtn" type="button" title="Fit Width" class="w-8 h-8 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-arrows-out-line-horizontal"></i>
+        </button>
+        <div class="w-5 h-px bg-zinc-700/80 my-0.5"></div>
+        <button id="pageUpBtn" type="button" title="Previous Page" class="w-8 h-7 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-caret-up"></i>
+        </button>
+        <div class="flex flex-col items-center py-0.5 text-[10px] font-semibold text-zinc-200 leading-tight">
+          <span id="currentPageLabel">1</span>
+          <span class="text-zinc-500">/</span>
+          <span id="totalPagesLabel">1</span>
+        </div>
+        <button id="pageDownBtn" type="button" title="Next Page" class="w-8 h-7 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-caret-down"></i>
+        </button>
+      </div>
+    </main>
+
+    <!-- RIGHT AI LITERATURE ASSISTANT SIDEBAR (#aiSidebar) -->
+    <aside id="aiSidebar" class="w-full sm:w-[375px] bg-[#18181d] border-l border-zinc-800 flex flex-col shrink-0 z-20">
+      <div class="h-11 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <i class="ph-fill ph-sparkle text-indigo-400"></i>
+          <span class="text-xs font-bold text-zinc-100">AI Literature Assistant</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button id="clearChatBtn" type="button" title="Clear chat" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 text-xs cursor-pointer">
+            <i class="ph ph-trash"></i>
+          </button>
+          <button id="closeAiSidebarBtn" type="button" title="Close AI sidebar" onclick="window.toggleAiSidebar && window.toggleAiSidebar(false)" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 text-xs cursor-pointer">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Prompt Chips -->
+      <div class="px-3 py-2 border-b border-zinc-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0">
+        <button type="button" data-quick-prompt="Provide a concise IMRaD summary (Introduction, Methods, Results, Discussion) of this paper." class="quick-prompt-chip shrink-0 px-2.5 py-1 rounded-full bg-[#222228] hover:bg-zinc-700 text-[11px] text-zinc-200 border border-zinc-700/70 transition cursor-pointer">
+          IMRaD Summary
+        </button>
+        <button type="button" data-quick-prompt="Generate accurate APA 7th edition and BibTeX citation entries for this paper." class="quick-prompt-chip shrink-0 px-2.5 py-1 rounded-full bg-[#222228] hover:bg-zinc-700 text-[11px] text-zinc-200 border border-zinc-700/70 transition cursor-pointer">
+          APA &amp; BibTeX
+        </button>
+        <button type="button" data-quick-prompt="Critique the methodology, sample size, and key limitations of this study." class="quick-prompt-chip shrink-0 px-2.5 py-1 rounded-full bg-[#222228] hover:bg-zinc-700 text-[11px] text-zinc-200 border border-zinc-700/70 transition cursor-pointer">
+          Critique Limitations
+        </button>
+      </div>
+
+      <!-- Chat History (#chatMessages) -->
+      <div id="chatMessages" class="flex-1 overflow-y-auto p-3.5 space-y-3 select-text">
+        <div class="p-3 rounded-2xl bg-[#222228] border border-zinc-800 text-xs text-zinc-300 leading-relaxed">
+          Open any academic PDF and click <strong class="text-indigo-300">1-Click Auto Matrix</strong> to extract structured literature synthesis with clickable <span class="text-indigo-300 font-bold">[1]–[10]</span> sentence jump-links.
+        </div>
+      </div>
+
+      <!-- Explicit Selection Context Banner -->
+      <div id="selectionContextBanner" class="hidden mx-3 mb-2 p-2.5 rounded-xl bg-indigo-950/75 border border-indigo-500/40 text-xs">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span id="referringPageLabel" class="text-[11px] font-semibold text-indigo-300 flex items-center gap-1">
+            <i class="ph-bold ph-quotes"></i> Referring to Page 1
+          </span>
+          <button id="dismissSelectionBannerBtn" type="button" class="text-zinc-400 hover:text-white text-[11px] cursor-pointer">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+        <p id="selectedQuoteSnippet" class="text-[11px] text-zinc-300 italic line-clamp-2 mb-2"></p>
+        <div class="flex items-center gap-1 flex-wrap">
+          <button type="button" data-sel-cat="objective" class="sel-cat-highlight-btn px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-semibold hover:bg-amber-500/30 cursor-pointer">Objective</button>
+          <button type="button" data-sel-cat="methodology" class="sel-cat-highlight-btn px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-semibold hover:bg-sky-500/30 cursor-pointer">Methodology</button>
+          <button type="button" data-sel-cat="finding" class="sel-cat-highlight-btn px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-semibold hover:bg-emerald-500/30 cursor-pointer">Findings</button>
+          <button type="button" data-sel-cat="limitation" class="sel-cat-highlight-btn px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-semibold hover:bg-rose-500/30 cursor-pointer">Limitations</button>
+          <button type="button" data-sel-cat="citation" class="sel-cat-highlight-btn px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-semibold hover:bg-purple-500/30 cursor-pointer">Citation</button>
+        </div>
+      </div>
+
+      <!-- Chat Composer -->
+      <div class="p-3 border-t border-zinc-800 bg-[#141418] shrink-0">
+        <div class="flex items-end gap-2 bg-[#222228] border border-zinc-700/80 rounded-2xl p-2">
+          <textarea id="chatInput" rows="2" placeholder="Ask about methodology, findings, or selected quote..." class="flex-1 bg-transparent text-xs text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none leading-relaxed"></textarea>
+          <button id="sendChatBtn" type="button" class="w-8 h-8 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shrink-0 transition cursor-pointer">
+            <i class="ph-bold ph-paper-plane-right text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== LITERATURE REVIEW SYNTHESIS MATRIX MODAL (#matrixModal) ==================== -->
+  <div id="matrixModal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-5">
+    <div class="w-full max-w-[96vw] xl:max-w-[1440px] max-h-[90vh] rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl flex flex-col overflow-hidden text-zinc-100">
+      <div class="px-5 py-4 border-b border-zinc-800 bg-[#121216] flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shrink-0">
+            <i class="ph-bold ph-list-numbers text-xl"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Literature Review Synthesis Matrix</h3>
+            <p class="text-xs text-zinc-400 mt-0.5 flex flex-wrap items-center gap-1">
+              <span>Click any cell to edit inline, hover or click</span>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[10px]">[1]</span>
+              <span>to jump to the exact highlighted sentence in the PDF</span>
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="autoExtractAllMatrixBtn" type="button" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+            <i class="ph-bold ph-magic-wand"></i>
+            <span>Extract Open PDFs</span>
+          </button>
+          <button id="synthesizeCrossPaperBtn" type="button" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:brightness-110 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+            <i class="ph-fill ph-sparkle text-amber-300"></i>
+            <span>Synthesize Review</span>
+          </button>
+          <button id="importMergeMatrixBtn" type="button" title="Import & merge a saved Matrix JSON or CSV file" class="px-2.5 py-1.5 rounded-lg bg-[#222228] hover:bg-sky-500/20 text-zinc-200 hover:text-sky-300 border border-zinc-700 text-xs font-semibold flex items-center gap-1 transition cursor-pointer">
+            <i class="ph-bold ph-folder-plus text-sky-400"></i>
+            <span>Merge File</span>
+          </button>
+          <input id="matrixImportInput" type="file" accept=".json,.csv,application/json,text/csv" class="hidden" />
+          <button id="exportMatrixJsonBtn" type="button" title="Save portable Matrix backup (.json) for later merging" class="px-2.5 py-1.5 rounded-lg bg-[#222228] hover:bg-purple-500/20 text-zinc-200 hover:text-purple-300 border border-zinc-700 text-xs font-semibold flex items-center gap-1 transition cursor-pointer">
+            <i class="ph-bold ph-floppy-disk text-purple-400"></i>
+            <span>Save Matrix</span>
+          </button>
+          <button id="exportMatrixCsvBtn" type="button" class="px-2.5 py-1.5 rounded-lg bg-[#222228] hover:bg-emerald-500/20 text-zinc-200 hover:text-emerald-300 border border-zinc-700 text-xs font-semibold flex items-center gap-1 transition cursor-pointer">
+            <i class="ph-bold ph-file-csv text-emerald-400"></i>
+            <span>CSV</span>
+          </button>
+          <button id="exportMatrixPdfBtn" type="button" title="Export Landscape PDF Literature Matrix" class="px-2.5 py-1.5 rounded-lg bg-[#222228] hover:bg-rose-500/20 text-zinc-200 hover:text-rose-300 border border-zinc-700 text-xs font-semibold flex items-center gap-1 transition cursor-pointer">
+            <i class="ph-bold ph-file-pdf text-rose-400"></i>
+            <span>PDF</span>
+          </button>
+          <button id="clearAllMatrixRowsBtn" type="button" title="Clear all stored rows from Matrix" class="px-2 py-1.5 rounded-lg bg-[#222228] hover:bg-rose-500/20 text-zinc-400 hover:text-rose-300 border border-zinc-700 text-xs font-semibold transition cursor-pointer">
+            <i class="ph-bold ph-trash"></i>
+          </button>
+          <button id="closeMatrixModalBtn" type="button" onclick="window.closeMatrixModal && window.closeMatrixModal()" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer">
+            <i class="ph-bold ph-x text-base"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Cross-Paper Synthesis Panel (Hidden until triggered) -->
+      <div id="crossPaperSynthesisPanel" class="hidden border-b border-zinc-800 bg-[#141419] px-5 py-4 max-h-[38vh] overflow-y-auto select-text">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2 text-xs font-bold text-fuchsia-300">
+            <i class="ph-fill ph-sparkle"></i>
+            <span>Cross-Paper Thematic &amp; Gap Synthesis</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="copySynthesisBtn" type="button" class="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-semibold cursor-pointer">Copy Draft</button>
+            <button id="closeSynthesisPanelBtn" type="button" class="text-zinc-400 hover:text-white text-xs cursor-pointer"><i class="ph-bold ph-x"></i></button>
+          </div>
+        </div>
+        <div id="crossPaperSynthesisContent" class="text-xs text-zinc-200 leading-relaxed space-y-2 ai-prose"></div>
+      </div>
+
+      <div id="matrixTableContainer" class="flex-1 overflow-auto p-5 bg-[#18181d] select-text"></div>
+    </div>
+  </div>
+
+  <!-- ==================== GEMINI API & MODEL SETTINGS MODAL (#apiSettingsModal) ==================== -->
+  <div id="apiSettingsModal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-5 py-4 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center">
+            <i class="ph-bold ph-key"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Gemini API &amp; Model Settings</h3>
+            <p class="text-[11px] text-zinc-400">Configure your Google AI Studio free-tier key</p>
+          </div>
+        </div>
+        <button id="closeApiSettingsBtn" type="button" onclick="window.closeApiSettingsModal && window.closeApiSettingsModal()" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4 text-xs">
+        <div>
+          <label class="block text-zinc-300 font-semibold mb-1.5">Gemini Model</label>
+          <select id="geminiModelSelect" class="w-full px-3 py-2 rounded-xl bg-[#121216] border border-zinc-700 text-zinc-100 focus:outline-none focus:border-indigo-500">
+            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Free-Tier Fast Default)</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash (Balanced Synthesis)</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Reasoning)</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-zinc-300 font-semibold">Google AI Studio API Key</label>
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/35 text-[11px] font-semibold transition">
+              <span>Get Free API Key</span>
+              <i class="ph-bold ph-arrow-up-right"></i>
+            </a>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="geminiApiKeyInput" type="password" placeholder="AIzaSy..." class="flex-1 px-3 py-2 rounded-xl bg-[#121216] border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500" />
+            <button id="pasteApiKeyBtn" type="button" class="px-3 py-2 rounded-xl bg-[#222228] hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold transition cursor-pointer">
+              Paste
+            </button>
+          </div>
+        </div>
+
+        <div id="apiTestStatusBox" class="hidden p-2.5 rounded-xl text-xs border"></div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+          <button id="testApiConnBtn" type="button" class="px-3.5 py-2 rounded-xl bg-[#222228] hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold transition cursor-pointer">
+            Test Connection
+          </button>
+          <button id="saveApiSettingsBtn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow transition cursor-pointer">
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== UNSAVED PDF TAB CLOSE SAFEGUARD MODAL (#unsavedCloseModal) ==================== -->
+  <div id="unsavedCloseModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-4 py-3 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+          <i class="ph-bold ph-warning"></i> Unsaved PDF Annotations
+        </span>
+        <button id="cancelCloseTabBtn" type="button" class="w-7 h-7 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-4 space-y-3 text-xs">
+        <p id="unsavedCloseMessage" class="text-zinc-300 leading-relaxed">
+          You have unsaved highlights or margin notes on this PDF. Do you want to save the annotated PDF before closing?
+        </p>
+        <div class="flex flex-col gap-2 pt-1">
+          <button id="saveAndCloseTabBtn" type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-floppy-disk"></i>
+            <span>Save PDF &amp; Close Tab</span>
+          </button>
+          <button id="discardAndCloseTabBtn" type="button" class="w-full py-2 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/35 text-rose-300 border border-rose-500/40 font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer">
+            <i class="ph-bold ph-trash"></i>
+            <span>Close Without Saving PDF</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ABOUT & LOCAL PRIVACY MODAL (#aboutPrivacyModal) ==================== -->
+  <div id="aboutPrivacyModal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-5 py-4 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+            <i class="ph-bold ph-shield-check"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v9 — Local-First Research Workspace</p>
+          </div>
+        </div>
+        <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 text-xs text-zinc-300 leading-relaxed">
+        <div class="p-3 rounded-xl bg-[#121216] border border-zinc-800 space-y-1.5">
+          <div class="font-bold text-emerald-300 flex items-center gap-1.5">
+            <i class="ph-fill ph-lock-key"></i> 100% Local File Processing
+          </div>
+          <p class="text-[11px] text-zinc-400">
+            All PDFs, highlights, sticky notes, and Literature Matrix tables are processed and stored locally inside your browser/desktop storage (<code class="text-zinc-300">IndexedDB</code> &amp; <code class="text-zinc-300">localStorage</code>). Your manuscripts are never uploaded to any third-party cloud server.
+          </p>
+        </div>
+        <div class="p-3 rounded-xl bg-[#121216] border border-zinc-800 space-y-1.5">
+          <div class="font-bold text-indigo-300 flex items-center gap-1.5">
+            <i class="ph-fill ph-sparkle"></i> Direct Gemini API Connection (BYOK)
+          </div>
+          <p class="text-[11px] text-zinc-400">
+            When you configure your own Google AI Studio API key, text excerpts are sent directly from your device to Google's Gemini API over HTTPS. Offline matrix extraction works completely without an internet connection.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SAVE PDF OPTIONS MODAL (#savePdfOptionsModal) ==================== -->
+  <div id="savePdfOptionsModal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-4 py-3 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <span class="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+          <i class="ph-bold ph-floppy-disk"></i> Save Annotated PDF
+        </span>
+        <button id="closeSavePdfModalBtn" type="button" class="w-7 h-7 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-4 space-y-3 text-xs">
+        <p class="text-zinc-300 leading-relaxed">
+          Do you want to overwrite the original PDF file on your computer or save a separate copy?
+        </p>
+        <div class="flex flex-col gap-2 pt-1">
+          <button id="confirmOverwriteOriginalBtn" type="button" class="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-warning-circle"></i>
+            <span>Overwrite Original File</span>
+          </button>
+          <button id="confirmSaveNewCopyBtn" type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-copy"></i>
+            <span>Save as New Copy</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== STICKY NOTE MODAL (#stickyNoteModal) ==================== -->
+  <div id="stickyNoteModal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-4 py-3 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+          <i class="ph-fill ph-note"></i> Margin Sticky Note
+        </span>
+        <button id="closeStickyNoteModalBtn" type="button" class="w-7 h-7 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-4 space-y-3">
+        <textarea id="stickyNoteTextarea" rows="4" placeholder="Write your margin annotation or critique..." class="w-full p-2.5 rounded-xl bg-[#121216] border border-zinc-700 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"></textarea>
+        <div class="flex items-center justify-between">
+          <button id="deleteStickyNoteBtn" type="button" class="hidden px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/35 text-xs font-semibold cursor-pointer">
+            Delete Note
+          </button>
+          <div class="flex items-center gap-2 ml-auto">
+            <button id="saveStickyNoteBtn" type="button" class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow cursor-pointer">
+              Save Note
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST NOTIFICATION BANNER ==================== -->
+  <div id="toastBanner" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[120] px-4 py-2 rounded-full bg-[#18181d] border border-zinc-700 shadow-2xl flex items-center gap-2 text-xs text-zinc-100">
+    <span id="toastDot" class="w-2 h-2 rounded-full bg-indigo-400"></span>
+    <span id="toastMessage">Ready</span>
+  </div>
+
+  <!-- Modular Scripts -->
+  <script src="js/security-lock.js"></script>
+  <script src="js/installers.js"></script>
+  <script src="js/pdf-engine.js"></script>
+  <script src="js/matrix-ai.js"></script>
+</body>
+</html>
