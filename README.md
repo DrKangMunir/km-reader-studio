@@ -11,7 +11,7 @@ Built for postgraduate students, researchers, and lecturers who want to extract 
   👉 **[Open KM-Reader Studio Live](https://drkangmunir.github.io/km-reader-studio/)** *(Works on Windows, macOS, tablets & phones — installable via "Add to Home Screen")*
 
 * **Download Desktop App (Windows):**  
-  👉 **[Get KM-Reader Studio Desktop (.zip)](https://tally.so/r/YOUR_TALLY_FORM_ID)** *(Unzip and double-click `Install-KM-Reader-Studio-Windows.bat` to create a Desktop shortcut)*
+  👉 **[Get KM-Reader Studio Desktop (.zip)](https://tally.so/r/gbG56P)** *(Unzip and double-click `Install-KM-Reader-Studio-Windows.bat` to create a Desktop shortcut)*
 
 ---
 
