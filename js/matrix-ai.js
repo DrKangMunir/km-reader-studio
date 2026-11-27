@@ -1049,6 +1049,34 @@
       KM.downloadBlobFile('KM-Reader-Literature-Matrix.csv', lines.join('\r\n'), 'text/csv;charset=utf-8');
     });
 
+    KM.on('exportMatrixBibBtn', 'click', function () {
+      var rows = KM.state.matrixRows || [];
+      if (!rows.length) {
+        KM.showToast('No matrix rows to export.', 'error');
+        return;
+      }
+      var entries = rows.map(function (r, idx) {
+        var rawAuth = String(r.authors || 'Unknown').replace(/\(\d{4}\)/g, '').replace(/et al\.?/gi, '').trim();
+        var yearMatch = String(r.authors || '').match(/(19|20)\d{2}/);
+        var year = yearMatch ? yearMatch[0] : '2026';
+        var keyAuthor = rawAuth.split(/[\s,]+/)[0].replace(/[^a-zA-Z]/g, '').toLowerCase() || 'study';
+        var citeKey = keyAuthor + year + '_' + (idx + 1);
+
+        var fields = [
+          '  author = {' + String(r.authors || 'Unknown Author').replace(/\(\d{4}\)/g, '').trim() + '}',
+          '  title = {{' + String(r.title || 'Untitled Study').trim() + '}}',
+          '  year = {' + year + '}'
+        ];
+        if (r.journal) fields.push('  journal = {' + String(r.journal).trim() + '}');
+        if (r.doi) fields.push('  doi = {' + String(r.doi).trim() + '}');
+
+        return '@article{' + citeKey + ',\n' + fields.join(',\n') + '\n}';
+      });
+
+      KM.downloadBlobFile('KM-Reader-References.bib', entries.join('\n\n'), 'application/x-bibtex;charset=utf-8');
+      KM.showToast('Exported ' + rows.length + ' citation(s) to BibTeX!', 'success');
+    });
+
     KM.on('exportMatrixPdfBtn', 'click', async function () {
       var rows = KM.state.matrixRows || [];
       if (!rows.length) {
