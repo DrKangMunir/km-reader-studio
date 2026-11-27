@@ -1612,6 +1612,28 @@
       var m = KM.$('aboutPrivacyModal');
       if (m) { m.classList.add('hidden'); m.style.display = ''; }
     });
+    KM.on('shareAppBtn', 'click', async function () {
+      var shareUrl = 'https://drkangmunir.github.io/km-reader-studio/';
+      var shareData = {
+        title: 'KM-Reader Studio',
+        text: 'Check out KM-Reader Studio — a free offline-first academic PDF reader & Literature Review Matrix generator:',
+        url: shareUrl
+      };
+      try {
+        if (navigator.share) {
+          await navigator.share(shareData);
+          return;
+        }
+      } catch (e) {}
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          KM.showToast('App link copied! Ready to paste & share with colleagues.', 'success');
+          return;
+        }
+      } catch (e) {}
+      KM.showToast('Share link: ' + shareUrl, 'info');
+    });
 
     // Built-in Sample Academic Paper Generator ("Try Sample Paper")
     KM.on('loadSamplePaperBtn', 'click', async function () {
