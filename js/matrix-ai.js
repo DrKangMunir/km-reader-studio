@@ -12,7 +12,12 @@
     if (modelSel) modelSel.value = KM.state.model;
     if (dot) dot.className = 'w-2 h-2 rounded-full ' + (KM.state.apiKey ? 'bg-emerald-400' : 'bg-amber-400');
     if (badge) {
-      var labels = {
+      var isMobile = window.innerWidth < 640;
+      var labels = isMobile ? {
+        'gemini-3.5-flash-lite': 'Gemini 3.5',
+        'gemini-2.5-flash': '2.5 Flash',
+        'gemini-2.5-pro': '2.5 Pro'
+      } : {
         'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite',
         'gemini-2.5-flash': 'Gemini 2.5 Flash',
         'gemini-2.5-pro': 'Gemini 2.5 Pro'
