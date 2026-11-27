@@ -10,6 +10,8 @@
     var modelSel = KM.$('geminiModelSelect');
     if (keyInput) keyInput.value = KM.state.apiKey;
     if (modelSel) modelSel.value = KM.state.model;
+    var strictBox = KM.$('strictVerbatimToggle');
+    if (strictBox) strictBox.checked = Boolean(KM.state.strictVerbatim);
     if (dot) dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (KM.state.apiKey ? 'bg-emerald-400' : 'bg-amber-400');
     var wBtn = KM.$('welcomeSetupApiBtn');
     var wLbl = KM.$('welcomeApiBtnLabel');
@@ -40,7 +42,57 @@
     }
   }
 
-  // ==================== DETERMINISTIC OFFLINE NLP MATRIX GENERATOR ====================
+  // ==================== v24: FIELD RULES (where each matrix field may take its sentence from) ====================
+  var FIELD_RULES = {
+    settingPopulation:    { col: 'context',     n: 1, noCites: true,  sections: ['methods', 'abstract', 'front', 'results'], re: /\b(participants?|respondents?|subjects|patients|recruited|enrolled|aged|mean age|sample|population|setting|conducted (?:in|at|among)|clinics?|hospitals?|district|villages?|communit\w*)\b/gi, neg: /95% CI|odds ratio|\bOR\b|\bp\s*[<=≤]\s*0?\.\d|regression|\bfewer\b|\bmore likely\b/i },
+    problemObjective:     { col: 'purpose',     n: 1, noCites: true,  sections: ['introduction', 'abstract', 'front', 'methods'], re: /\b(aim(?:ed|s)?|objectives?|purpose|this study|we (?:aimed|sought|examined|investigated|assessed)|to (?:determine|investigate|assess|explore|examine|evaluate|identify|describe|develop|validate))\b/gi },
+    theoreticalFramework: { col: 'purpose',     n: 1, noCites: false, sections: ['introduction', 'methods', 'abstract', 'front'], re: /(theoretical framework|conceptual framework|health belief model|theory of planned behaviou?r|protection motivation theory|social cognitive theory|transtheoretical model|\b5C\b|guided by the|based on the [^.]{0,40}(?:model|theory))/gi },
+    studyDesign:          { col: 'methodology', n: 1, noCites: true,  sections: ['methods', 'abstract', 'front'], re: /\b(cross-sectional|randomi[sz]ed|cohort|case-control|meta-analysis|systematic review|qualitative|mixed[- ]methods?|longitudinal|survey|focus groups?|interviews?|questionnaire|study design)\b/gi },
+    dataAnalysis:         { col: 'methodology', n: 1, noCites: false, sections: ['methods', 'abstract', 'front'], re: /\b(spss|stata|sas|r software|r version|regression|chi-square|t-test|anova|statistical|analy[sz]ed|factor analysis|rasch|cronbach)\b/gi },
+    mainResults:          { col: 'findings',    n: 2, noCites: true,  sections: ['results', 'abstract', 'front'], re: /(\d+(?:\.\d+)?\s?%|\bp\s*[<=\u2264]\s*0?\.\d+|\bodds ratio|\bassociat\w*|\bsignifican\w*|\bmean (?:score|age)|\bmajority|\bpredict\w*)/gi, neg: /\b(?:most|majority) of (?:the )?(?:respondents|participants|subjects) (?:were|owned|had|lived|reported that they had)\b|\bowned\b|\bmean age\b|\b(?:malays?|chinese|indians?|males?|females?)\s*\(\d|\b(?:married|educational level|monthly income)\b/i },
+    conclusions:          { col: 'findings',    n: 1, noCites: true,  sections: ['conclusion', 'abstract', 'front', 'discussion'], re: /\b(in conclusion|conclu\w*|in summary|overall|we recommend|recommend\w*|there is a need|implications?|suggest\w*)\b/gi },
+    strengthsLimitations: { col: 'evaluation',  n: 1, noCites: true,  sections: ['limitations', 'discussion', 'conclusion'], re: /\b(limitations?|strengths?|(?:was|is|were) limited (?:by|to)|bias|generali[sz]\w*|self-report\w*|small sample|causal\w*)\b/gi, neg: /\b(?:in|by) (?:a|another|one|the) (?:previous |earlier |recent )?study\b|\bstudies (?:in|from|by)\b/i },
+    connectionRelevance:  { col: 'evaluation',  n: 1, noCites: false, sections: ['discussion', 'conclusion'], re: /\b(consistent with|similar to|in line with|in contrast|contrary|previous stud\w*|adds? to|contribut\w*|first study|novel)\b/gi }
+  };
+  var FIELD_ORDER = ['settingPopulation', 'problemObjective', 'theoreticalFramework', 'studyDesign', 'dataAnalysis', 'mainResults', 'conclusions', 'strengthsLimitations', 'connectionRelevance'];
+  var COL_FIELDS = { context: ['settingPopulation'], purpose: ['problemObjective', 'theoreticalFramework'], methodology: ['studyDesign', 'dataAnalysis'], findings: ['mainResults', 'conclusions'], evaluation: ['strengthsLimitations', 'connectionRelevance'] };
+  var COL_STYLE = { context: 'objective', purpose: 'objective', methodology: 'methodology', findings: 'finding', evaluation: 'limitation' };
+  var FIELD_LABELS = { settingPopulation: 'Setting / Population', problemObjective: 'Research Problem & Question', theoreticalFramework: 'Theoretical Framework', studyDesign: 'Study Design', dataAnalysis: 'Data Collection & Analysis', mainResults: 'Main Results', conclusions: "Authors' Conclusions", strengthsLimitations: 'Strengths & Limitations', connectionRelevance: 'Connection & Relevance' };
+
+  // A paper "has sections" when at least two of the usual headings were found; otherwise section rules are not applied
+  function corpusHasSections(reg) {
+    var seen = {};
+    Object.keys(reg).forEach(function (id) { seen[reg[id].section] = 1; });
+    return ['introduction', 'methods', 'results', 'discussion'].filter(function (k) { return seen[k]; }).length >= 2;
+  }
+  function sentenceAllowed(entry, fieldKey, hasSections, allowLines) {
+    var rule = FIELD_RULES[fieldKey];
+    if (!entry || !rule) return false;
+    if (entry.section === 'references' || entry.section === 'backmatter') return false;
+    if (rule.noCites && entry.cites) return false;            // reports another study, not this one
+    if (entry.kind === 'line' && !allowLines) return false;
+    if (/^\d+\.\s+[A-Z]/.test(entry.text)) return false;      // bibliography-style line
+    if (!hasSections) return true;
+    return rule.sections.indexOf(entry.section) !== -1;
+  }
+  function rankCandidates(fieldKey, reg, hasSections, limit) {
+    var rule = FIELD_RULES[fieldKey];
+    var scored = [];
+    Object.keys(reg).forEach(function (id, order) {
+      var e = reg[id];
+      if (!sentenceAllowed(e, fieldKey, hasSections, false)) return;
+      var hits = (e.text.match(rule.re) || []).length;
+      if (!hits) return;
+      if (rule.neg && rule.neg.test(e.text)) hits -= 2.5;   // demographic description or another study's finding
+      var secIdx = rule.sections.indexOf(e.section);
+      var secBonus = secIdx === -1 ? 0 : (rule.sections.length - secIdx) / rule.sections.length;
+      scored.push({ id: id, score: Math.min(hits, 4) + secBonus * 1.5, order: order });
+    });
+    scored.sort(function (x, y) { return y.score - x.score || x.order - y.order; });
+    return scored.slice(0, limit || 6).map(function (x) { return x.id; });
+  }
+
+  // ==================== DETERMINISTIC OFFLINE MATRIX GENERATOR (v24: section-aware) ====================
   function buildDeterministicMatrixFromCorpus(paper, corpus) {
     var reg = corpus.sentenceRegistry;
     var ids = Object.keys(reg);
@@ -55,98 +107,31 @@
       fullSample.match(/\b(EMHJ\s*[–-]\s*Vol\.\s*\d+\s*No\.\s*\d+\s*[–-]\s*20\d{2})\b/i);
     var journal = journalMatch ? journalMatch[1].trim() : '';
 
-    function isNonBodyNoise(txt) {
-      return /^\d+\.\s+[A-Z]/.test(txt) ||
-        /\b(DOI:\s*10\.|PMID:|https?:\/\/doi\.org)\b/i.test(txt) ||
-        /^(Enquête|Résumé|Contexte|Objectif\s*:|Méthodes\s*:|Résultats\s*:)/i.test(txt);
-    }
-
-    function pickId(regex, startPct, endPct, excludeRegex) {
-      var startIdx = Math.floor(ids.length * (startPct || 0));
-      var endIdx = endPct ? Math.min(ids.length, Math.ceil(ids.length * endPct)) : ids.length;
-      for (var i = startIdx; i < endIdx; i++) {
-        var id = ids[i];
-        var txt = reg[id].text;
-        if (!used[id] && !isNonBodyNoise(txt) && (!excludeRegex || !excludeRegex.test(txt)) && regex.test(txt)) {
-          used[id] = true;
-          return id;
-        }
-      }
-      for (var j = 0; j < ids.length; j++) {
-        var id2 = ids[j];
-        var txt2 = reg[id2].text;
-        if (!used[id2] && !isNonBodyNoise(txt2) && (!excludeRegex || !excludeRegex.test(txt2)) && regex.test(txt2)) {
-          used[id2] = true;
-          return id2;
-        }
-      }
-      for (var k = startIdx; k < ids.length; k++) {
-        if (!used[ids[k]] && !isNonBodyNoise(reg[ids[k]].text)) {
-          used[ids[k]] = true;
-          return ids[k];
-        }
-      }
-      return ids[0] || null;
-    }
-
-    function formatSentenceWithBadge(sId, badgeNum) {
-      if (!sId || !reg[sId]) return '';
-      var txt = reg[sId].text.trim().replace(/[.]+$/, '');
-      return txt + ' [' + badgeNum + '].';
-    }
-
-    var sSetting = pickId(/\b(aged \d+|living in|across|regions of|participants enrolled|mean age|male|female|population|setting)\b/i, 0.02, 0.55);
-    var sObj = pickId(/\b(aim|aimed|objective|purpose|determine|investigate|identify the key)\b/i, 0.0, 0.35, /^(Results|Methods|Conclusion):/i);
-    var sTheory = pickId(/\b(theoretical framework|conceptual framework|health belief model|theory of planned|behavioral model|grounded theory|social cognitive theory)\b/i, 0.02, 0.65);
-    var sDesign = pickId(/\b(cross-sectional|randomized|cohort|meta-analysis|systematic review|qualitative|mixed[- ]methods|longitudinal)\b/i, 0.02, 0.45);
-    var sAnalysis = pickId(/\b(questionnaire|instrument|spss|regression|chi-square|t-test|anova|statistical|confidence interval|analyzed using)\b/i, 0.03, 0.50);
-    var sRes1 = pickId(/\b(reported|underwent|unaware|barrier|lack of information|fear of|only \d+%)\b/i, 0.0, 0.75, /\b(mean age|married at the time|demographics)\b/i);
-    var sRes2 = pickId(/\b(only \d+%|majority of participants|P\s*[<≤=]\s*0\.00\d|statistically significant|significantly associated)\b/i, 0.05, 0.80, /association was set at/i);
-    var sConcl = pickId(/\b(conclusion|our findings show|there is a need|awareness campaigns|implications|recommend)\b/i, 0.05, 0.88, /^(Results|Methods):/i);
-    var sLim = pickId(/\b(limitation|limited by|self-reported|self-administered|bias|generalizab|quantitative nature|recall)\b/i, 0.40, 0.90);
-    var sConn = pickId(/\b(aligns with|consistent with|previous study|conflicting with|et al\.|exceeding previous)\b/i, 0.35, 0.88);
-
-    var theoryText = sTheory
-      ? formatSentenceWithBadge(sTheory, 3)
-      : 'No explicit theoretical framework stated (empirical/descriptive study).';
-
-    var purposeIds = [sObj, sTheory].filter(Boolean);
-    var designLabel = (sDesign && /cross-sectional/i.test(reg[sDesign].text)) ? 'Quantitative Cross-Sectional Study: '
-      : (sDesign && /randomized/i.test(reg[sDesign].text)) ? 'Experimental / RCT: '
-      : (sDesign && /qualitative/i.test(reg[sDesign].text)) ? 'Qualitative Study: '
-      : (sDesign && /mixed/i.test(reg[sDesign].text)) ? 'Mixed-Methods Study: ' : '';
+    var hasSections = corpusHasSections(reg);
+    var candidates = {};
+    var cols = { context: {}, purpose: {}, methodology: {}, findings: {}, evaluation: {} };
+    var badge = 1;
+    Object.keys(COL_FIELDS).forEach(function (colKey) {
+      var evidence = [];
+      COL_FIELDS[colKey].forEach(function (f) {
+        var ranked = rankCandidates(f, reg, hasSections, 7);
+        var chosen = ranked.slice(0, FIELD_RULES[f].n);
+        candidates[f] = ranked.slice(chosen.length);
+        cols[colKey][f] = chosen.length
+          ? chosen.map(function (id) { evidence.push(id); return reg[id].text.trim() + ' [' + (badge++) + ']'; }).join(' ')
+          : 'Not found automatically.';
+      });
+      cols[colKey].evidenceIds = evidence;
+    });
 
     return {
+      _deterministic: true,
+      _candidates: candidates,
       authors: meta.authors,
       title: meta.title,
       journal: journal,
       doi: doi,
-      columns: {
-        context: {
-          settingPopulation: formatSentenceWithBadge(sSetting, 1),
-          evidenceIds: [sSetting].filter(Boolean)
-        },
-        purpose: {
-          problemObjective: formatSentenceWithBadge(sObj, 2),
-          theoreticalFramework: theoryText,
-          evidenceIds: purposeIds
-        },
-        methodology: {
-          studyDesign: designLabel + formatSentenceWithBadge(sDesign, sTheory ? 4 : 3),
-          dataAnalysis: formatSentenceWithBadge(sAnalysis, sTheory ? 5 : 4),
-          evidenceIds: [sDesign, sAnalysis].filter(Boolean)
-        },
-        findings: {
-          mainResults: [formatSentenceWithBadge(sRes1, sTheory ? 6 : 5), formatSentenceWithBadge(sRes2, sTheory ? 7 : 6)].filter(Boolean).join(' '),
-          conclusions: formatSentenceWithBadge(sConcl, sTheory ? 8 : 7),
-          evidenceIds: [sRes1, sRes2, sConcl].filter(Boolean)
-        },
-        evaluation: {
-          strengthsLimitations: formatSentenceWithBadge(sLim, sTheory ? 9 : 8),
-          connectionRelevance: formatSentenceWithBadge(sConn, sTheory ? 10 : 9),
-          evidenceIds: [sLim, sConn].filter(Boolean)
-        }
-      }
+      columns: cols
     };
   }
 
@@ -180,11 +165,12 @@
     throw lastErr || new Error('Gemini API call failed.');
   }
 
+  var TRANSCRIPT_LIMIT = 900000;
   function getBalancedTranscript(fullTranscript) {
     if (!fullTranscript) return '';
-    if (fullTranscript.length <= 78000) return fullTranscript;
-    var head = fullTranscript.slice(0, 52000);
-    var tail = fullTranscript.slice(-26000);
+    if (fullTranscript.length <= TRANSCRIPT_LIMIT) return fullTranscript;   // v23: whole paper (was 78,000 characters)
+    var head = fullTranscript.slice(0, Math.round(TRANSCRIPT_LIMIT * 0.66));
+    var tail = fullTranscript.slice(-Math.round(TRANSCRIPT_LIMIT * 0.33));
     return head + '\n\n[... MIDDLE SECTION TRUNCATED FOR LENGTH ...]\n\n' + tail;
   }
 
@@ -230,6 +216,10 @@
             '2. EXACT TITLE, JOURNAL & DOI: Copy the exact full article title, exact journal citation/pages, and exact DOI from Page 1.',
             '3. SINGLE-SENTENCE INLINE GROUNDING: Place [Sxxx] immediately at the end of EACH individual sentence in your synthesis (for example: "Sentence A [S015]. Sentence B [S042]."). Every [Sxxx] MUST be the exact sentence in the PDF that contains the specific facts stated in that sentence.',
             '4. NEVER bundle multiple unrelated facts under one [Sxxx] tag—split them into separate sentences so each [Sxxx] highlights the exact matching source sentence in the PDF.',
+            '5. Lines marked "table/line" are table rows or short lines; cite them for figures that appear only in tables.',
+            '6. If the paper does not report something, write exactly "Not reported" for that field with no tag. Every number you write is checked against the cited sentence; unsupported statements are flagged in red.',
+            '7. Each line shows its section (abstract, introduction, methods, results, discussion, limitations, conclusion). Take mainResults only from results or the abstract, studyDesign and dataAnalysis from methods, strengthsLimitations from limitations or discussion. Never use a sentence marked "cites other work" for settingPopulation, problemObjective, studyDesign, mainResults or conclusions: it reports another study.',
+            '8. For every field also list up to 3 other good sentence IDs in "alternatives", best first.',
             'Extract all 5 pillars & 10 sub-fields:',
             '  1. context: Bibliographic metadata (authors, exact full title, exact journal, exact doi) + settingPopulation (countries/setting, exact sample size, demographics).',
             '  2. purpose: problemObjective (research problem, objective/aim) + theoreticalFramework (guiding model/theory and each specific domain/construct measured, citing the exact Methods/Questionnaire sentence IDs).',
@@ -248,7 +238,8 @@
             '    "methodology": { "studyDesign": "... [S018].", "dataAnalysis": "... [S052].", "evidenceIds": ["S018", "S052"] },',
             '    "findings": { "mainResults": "... [S060]. ... [S064].", "conclusions": "... [S095].", "evidenceIds": ["S060", "S064", "S095"] },',
             '    "evaluation": { "strengthsLimitations": "... [S088]. ... [S090].", "connectionRelevance": "... [S097].", "evidenceIds": ["S088", "S090", "S097"] }',
-            '  }',
+            '  },',
+            '  "alternatives": { "settingPopulation": ["S013"], "mainResults": ["S061", "S070"], "strengthsLimitations": ["S089"] }',
             '}',
             'Page 1 Header/Footer Metadata:\n' + page1HeaderHint + '\n\nIndexed Full-Text Transcript:\n' + transcriptSlice
           ].join('\n');
@@ -285,6 +276,7 @@
 
       var badgeSeq = 1;
       var linkedCount = 0;
+      var unverifiedCount = 0;
 
       var stopWords = {
         the:1, and:1, for:1, that:1, with:1, were:1, was:1, are:1, from:1, this:1,
@@ -315,117 +307,169 @@
         return hits / kws.length;
       }
 
-      function findBestSentenceForClaim(claimText, candidateSId) {
-        var cleanClaim = String(claimText || '').replace(/\[[^\]]+\]/g, '').trim();
-        var bestId = (candidateSId && reg[candidateSId]) ? candidateSId : null;
-        var currentScore = bestId ? scoreSentenceMatch(cleanClaim, reg[bestId].text) : 0;
-
-        // If the AI's cited sentence already shares >= 35% of the claim's key terms, trust it directly
-        if (bestId && currentScore >= 0.35) {
-          return bestId;
+      // v23: every number in a claim must be printed in the anchored PDF text
+      var numberCache = {};
+      function numbersIn(text) {
+        var t = String(text || '').replace(/(\d)[,   ](?=\d{3}(?!\d))/g, '$1');   // 11,592 / 11 592 -> 11592
+        return (t.match(/\d+(?:\.\d+)?/g) || []);
+      }
+      function numberPool(id) {
+        if (!numberCache[id]) {
+          var pool = {};
+          numbersIn(reg[id].text).forEach(function (n) { pool[n] = 1; pool[String(parseFloat(n))] = 1; });
+          numberCache[id] = pool;
         }
-
-        // Otherwise search all indexed sentences in the PDF for the true highest-overlap source sentence
-        var topScore = currentScore;
-        validIds.forEach(function (id) {
-          var sTxt = reg[id].text;
-          if (/^\d+\.\s+[A-Z]/.test(sTxt)) return; // skip bibliography lines
-          var sc = scoreSentenceMatch(cleanClaim, sTxt);
-          if (sc > topScore + 0.08) {
-            topScore = sc;
-            bestId = id;
-          }
+        return numberCache[id];
+      }
+      function numbersCovered(claimNums, ids) {
+        if (!claimNums.length) return true;
+        return claimNums.every(function (n) {
+          return ids.some(function (id) { var p = numberPool(id); return p[n] || p[String(parseFloat(n))]; });
         });
-        return bestId;
+      }
+      function stripTags(text) {
+        return String(text || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
       }
 
-      var fallbackRef = buildDeterministicMatrixFromCorpus(paper, corpus);
+      var hasSections = corpusHasSections(reg);
+
+      // Returns the verified sentence IDs for one claim, or [] if the claim is not supported by the PDF text
+      function verifyClaim(claimText, candidateIds, fieldKey) {
+        var claim = stripTags(claimText);
+        var cNums = numbersIn(claim);
+        var okFor = function (id) { return !FIELD_RULES[fieldKey] || sentenceAllowed(reg[id], fieldKey, hasSections, true); };
+        var valid = (candidateIds || []).filter(function (id) { return id && reg[id] && okFor(id); });
+        if (valid.length) {
+          var best = Math.max.apply(null, valid.map(function (id) { return scoreSentenceMatch(claim, reg[id].text); }));
+          if (numbersCovered(cNums, valid) && (best >= 0.35 || (cNums.length && best >= 0.2))) return valid;
+        }
+        // The cited sentence does not support the claim: search the whole paper for one that does
+        var bestId = null;
+        var topScore = 0;
+        validIds.forEach(function (id) {
+          var sTxt = reg[id].text;
+          if (/^\d+\.\s+[A-Z]/.test(sTxt)) return;   // skip bibliography lines
+          if (!okFor(id)) return;
+          if (!numbersCovered(cNums, [id])) return;
+          var sc = scoreSentenceMatch(claim, sTxt);
+          if (sc > topScore) { topScore = sc; bestId = id; }
+        });
+        var needed = cNums.length ? 0.35 : 0.5;
+        return (bestId && topScore >= needed) ? [bestId] : [];
+      }
+
+      var fieldEvidence = {};
+      function anchorBadge(sId, colKey, fieldKey) {
+        var entry = reg[sId];
+        var badgeNum = badgeSeq++;
+        linkedCount++;
+        if (fieldKey) {
+          fieldEvidence[fieldKey] = fieldEvidence[fieldKey] || { ids: [], badges: [] };
+          fieldEvidence[fieldKey].ids.push(sId);
+          fieldEvidence[fieldKey].badges.push(badgeNum);
+        }
+        paper.highlights.push({
+          id: 'auto_' + paper.id + '_' + badgeNum + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+          pageNum: entry.pageNum,
+          category: catToStyle[colKey],
+          citationNum: badgeNum,
+          isAutoMatrix: true,
+          sentenceId: sId,
+          quote: entry.text,
+          rects: entry.rects
+        });
+        return '[' + badgeNum + ']';
+      }
+
+      function sentenceIdsIn(text) {
+        var out = [];
+        (String(text || '').match(/S\d{3,5}/gi) || []).forEach(function (s) {
+          var id = s.toUpperCase();
+          if (reg[id] && out.indexOf(id) === -1) out.push(id);
+        });
+        return out;
+      }
+
+      var isDeterministic = Boolean(extracted && extracted._deterministic);
+      var strict = Boolean(KM.state.strictVerbatim);
+      var fallbackRef = isDeterministic ? extracted : deterministicBase;
+
+      // Alternatives for every field: the AI's suggestions first (if allowed), then the section-aware ranking
+      var aiAlt = (!isDeterministic && extracted.alternatives) || {};
+      var fieldCandidates = {};
+      FIELD_ORDER.forEach(function (f) {
+        var list = [];
+        (Array.isArray(aiAlt[f]) ? aiAlt[f] : []).forEach(function (x) {
+          var id = String(x).trim().toUpperCase();
+          if (reg[id] && sentenceAllowed(reg[id], f, hasSections, true) && list.indexOf(id) === -1) list.push(id);
+        });
+        ((deterministicBase._candidates && deterministicBase._candidates[f]) || []).forEach(function (id) { if (list.indexOf(id) === -1) list.push(id); });
+        (deterministicBase.columns[FIELD_RULES[f].col].evidenceIds || []).forEach(function (id) {
+          if (list.indexOf(id) === -1 && sentenceAllowed(reg[id], f, hasSections, false) && (reg[id].text.match(FIELD_RULES[f].re) || []).length) list.push(id);
+        });
+        fieldCandidates[f] = list;
+      });
 
       orderedCats.forEach(function (colKey) {
         var col = extracted.columns[colKey];
         if (!col) {
-          col = fallbackRef.columns[colKey] || {};
+          col = {};
+          COL_FIELDS[colKey].forEach(function (f) { col[f] = 'Not reported'; });
+          col.evidenceIds = [];
           extracted.columns[colKey] = col;
         }
 
         var fallbackIds = Array.isArray(col.evidenceIds)
           ? col.evidenceIds.map(function (s) { return String(s).trim().toUpperCase(); }).filter(function (id) { return Boolean(reg[id]); })
           : [];
-        if (!fallbackIds.length && fallbackRef.columns[colKey]) {
+        if (!fallbackIds.length && isDeterministic && fallbackRef.columns[colKey]) {
           fallbackIds = (fallbackRef.columns[colKey].evidenceIds || []).slice();
         }
         var fallbackCursor = 0;
 
-        // Process each text field in order of appearance so every [Sxxx] or [n] badge matches the exact clause right before it
         Object.keys(col).forEach(function (prop) {
-          if (typeof col[prop] !== 'string') return;
+          if (typeof col[prop] !== 'string' || !FIELD_RULES[prop]) return;
           var textVal = col[prop];
 
-          col[prop] = textVal.replace(/([^.!?;\n]*?)\[([S\d\s|,P.]+?)\]/gi, function (fullMatch, clauseBefore, inner) {
-            var sMatches = inner.match(/S\d{3}/gi);
-            var nMatches = inner.match(/\b\d{1,2}\b/g);
-            var tokens = [];
-
-            if (sMatches && sMatches.length) {
-              sMatches.forEach(function (sTag) {
-                var rawId = sTag.toUpperCase();
-                var verifiedId = findBestSentenceForClaim(clauseBefore, rawId);
-                if (verifiedId && reg[verifiedId]) {
-                  tokens.push(verifiedId);
-                }
-              });
-            } else if (nMatches && nMatches.length) {
-              nMatches.forEach(function () {
-                var cand = fallbackIds[fallbackCursor++] || null;
-                var verifiedId = findBestSentenceForClaim(clauseBefore, cand);
-                if (verifiedId && reg[verifiedId]) {
-                  tokens.push(verifiedId);
-                }
-              });
-            }
-
-            if (!tokens.length) return fullMatch;
-
-            var renderedChips = tokens.map(function (sId) {
-              var entry = reg[sId];
-              var badgeNum = badgeSeq++;
-              linkedCount++;
-              paper.highlights.push({
-                id: 'auto_' + paper.id + '_' + badgeNum + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                pageNum: entry.pageNum,
-                category: catToStyle[colKey],
-                citationNum: badgeNum,
-                isAutoMatrix: true,
-                sentenceId: sId,
-                quote: entry.text,
-                rects: entry.rects
-              });
-              return '[' + badgeNum + ']';
+          if (isDeterministic) {
+            // Offline engine: the text is already a verbatim PDF sentence; just attach its highlight
+            col[prop] = textVal.replace(/\[(\d{1,2})\]/g, function (m) {
+              var sId = fallbackIds[fallbackCursor++];
+              return (sId && reg[sId]) ? anchorBadge(sId, colKey, prop) : m;
             });
+            return;
+          }
 
-            return clauseBefore + renderedChips.join(' ');
-          });
+          if (strict) {
+            // Verbatim mode: exact PDF sentences only; sentences from the wrong section, or reporting other studies, are refused
+            var cited = sentenceIdsIn(textVal);
+            var ids = cited.filter(function (id) { return sentenceAllowed(reg[id], prop, hasSections, true); });
+            if (!ids.length && /^not reported\.?$/i.test(stripTags(textVal))) { col[prop] = 'Not reported.'; return; }
+            if (!ids.length && fieldCandidates[prop].length) ids = [fieldCandidates[prop][0]];   // best section-aware choice
+            col[prop] = ids.length
+              ? ids.map(function (id) { return reg[id].text.replace(/\s+$/, '') + ' ' + anchorBadge(id, colKey, prop); }).join(' ')
+              : 'Not found automatically.';
+            return;
+          }
+
+          // Checked mode: keep the AI wording, but every sentence must be supported by the PDF text it cites
+          var pieces = textVal.split(/(?<=\])\.?\s+|(?<=[.!?])\s+(?=[A-Z])/);
+          col[prop] = pieces.map(function (piece) {
+            var claim = stripTags(piece);
+            if (!claim) return '';
+            if (/^not reported\.?$/i.test(claim)) return 'Not reported.';   // a stated absence, not a claim to anchor
+            var cited = sentenceIdsIn(piece);
+            var numTags = (piece.match(/\[(\d{1,2})\]/g) || []);
+            if (!cited.length && numTags.length) {
+              numTags.forEach(function () { var c = fallbackIds[fallbackCursor++]; if (c) cited.push(c); });
+            }
+            var ok = verifyClaim(claim, cited, prop);
+            var body = claim.replace(/[.\s]+$/, '');
+            if (!ok.length) { unverifiedCount++; return body + ' [!].'; }
+            return body + ' ' + ok.map(function (id) { return anchorBadge(id, colKey, prop); }).join(' ') + '.';
+          }).filter(Boolean).join(' ');
         });
 
-        // If a column had no inline markers at all, anchor its fallback evidenceIds
-        if (!paper.highlights.some(function (h) { return h.isAutoMatrix && h.category === catToStyle[colKey]; }) && fallbackIds.length) {
-          fallbackIds.forEach(function (sId) {
-            var entry = reg[sId];
-            if (!entry) return;
-            var badgeNum = badgeSeq++;
-            linkedCount++;
-            paper.highlights.push({
-              id: 'auto_' + paper.id + '_' + badgeNum + '_' + Date.now(),
-              pageNum: entry.pageNum,
-              category: catToStyle[colKey],
-              citationNum: badgeNum,
-              isAutoMatrix: true,
-              sentenceId: sId,
-              quote: entry.text,
-              rects: entry.rects
-            });
-          });
-        }
       });
 
       for (var p = 1; p <= paper.numPages; p++) {
@@ -453,26 +497,59 @@
 
       var verifiedDoi = deterministicBase.doi || extracted.doi || '';
       var verifiedJournal = deterministicBase.journal || extracted.journal || '';
+      // v23: keep the AI's title and author line only if they are printed on page 1
+      var squash = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+      var page1Squashed = squash(corpus.page1RawText);
+      var onPage1 = function (x) { return Boolean(squash(x)) && page1Squashed.indexOf(squash(x)) !== -1; };
+      var aiTitle = extracted._deterministic ? '' : extracted.title;
+      var verifiedTitle = (aiTitle && squash(aiTitle).length >= 20 && onPage1(aiTitle)) ? aiTitle : meta.title;
+      var aiAuthors = extracted._deterministic ? '' : String(extracted.authors || '');
+      var leadSurname = aiAuthors.split(/[\s,(]+/)[0];
+      var aiYear = (aiAuthors.match(/\b(19|20)\d{2}\b/) || [''])[0];
+      var verifiedAuthors = (aiAuthors && onPage1(leadSurname) && (!aiYear || page1Squashed.indexOf(aiYear) !== -1)) ? aiAuthors : meta.authors;
+      var wasTruncated = (corpus.indexedTranscript || '').length > TRANSCRIPT_LIMIT && !extracted._deterministic;
+
+      // v24: per-field evidence (for swapping and review) and the sentences it may draw on
+      var sentenceStore = {};
+      var storeSentence = function (id) {
+        var e = reg[id];
+        if (e && !sentenceStore[id]) sentenceStore[id] = { pageNum: e.pageNum, quote: e.text, section: e.section || '', cites: Boolean(e.cites), rects: e.rects };
+      };
+      var rowEvidence = {};
+      FIELD_ORDER.forEach(function (f) {
+        var fe = fieldEvidence[f] || { ids: [], badges: [] };
+        var cands = (fieldCandidates[f] || []).filter(function (id) { return fe.ids.indexOf(id) === -1; }).slice(0, 4);
+        fe.ids.forEach(storeSentence);
+        cands.forEach(storeSentence);
+        rowEvidence[f] = { ids: fe.ids.slice(), badges: fe.badges.slice(), candidates: cands, status: 'auto', verbatim: Boolean(isDeterministic || strict) };
+      });
 
       paper.matrixRow = {
         paperId: paper.id,
         paperName: paper.title,
         fileName: paper.fileName || (paper.title + '.pdf'),
-        authors: extracted.authors || meta.authors,
-        title: extracted.title || meta.title,
+        authors: verifiedAuthors,
+        title: verifiedTitle,
         journal: verifiedJournal,
         doi: verifiedDoi,
         linkedCount: linkedCount,
+        unverifiedCount: unverifiedCount,
+        extractionMode: extracted._deterministic ? 'offline verbatim' : (strict ? 'AI-selected, verbatim' : 'AI wording, number-checked'),
+        truncated: wasTruncated,
         evidenceMap: evidenceMap,
-        settingPopulation: cCtx.settingPopulation || fallbackRef.columns.context.settingPopulation || '',
-        problemObjective: cPur.problemObjective || fallbackRef.columns.purpose.problemObjective || '',
-        theoreticalFramework: cPur.theoreticalFramework || fallbackRef.columns.purpose.theoreticalFramework || '',
-        studyDesign: cMet.studyDesign || fallbackRef.columns.methodology.studyDesign || '',
-        dataAnalysis: cMet.dataAnalysis || fallbackRef.columns.methodology.dataAnalysis || '',
-        mainResults: cFin.mainResults || fallbackRef.columns.findings.mainResults || '',
-        conclusions: cFin.conclusions || fallbackRef.columns.findings.conclusions || '',
-        strengthsLimitations: cEva.strengthsLimitations || fallbackRef.columns.evaluation.strengthsLimitations || '',
-        connectionRelevance: cEva.connectionRelevance || fallbackRef.columns.evaluation.connectionRelevance || ''
+        fieldEvidence: rowEvidence,
+        sentenceStore: sentenceStore,
+        sectionsDetected: hasSections,
+        mendeleyKey: String(paper.fileName || paper.title || '').replace(/\.pdf$/i, '').split(' - ')[0].trim(),
+        settingPopulation: cCtx.settingPopulation || 'Not found automatically.',
+        problemObjective: cPur.problemObjective || 'Not found automatically.',
+        theoreticalFramework: cPur.theoreticalFramework || 'Not found automatically.',
+        studyDesign: cMet.studyDesign || 'Not found automatically.',
+        dataAnalysis: cMet.dataAnalysis || 'Not found automatically.',
+        mainResults: cFin.mainResults || 'Not found automatically.',
+        conclusions: cFin.conclusions || 'Not found automatically.',
+        strengthsLimitations: cEva.strengthsLimitations || 'Not found automatically.',
+        connectionRelevance: cEva.connectionRelevance || 'Not found automatically.'
       };
 
       paper.isDirty = true;
@@ -484,7 +561,9 @@
 
       if (!silent) {
         var summaryMd = [
-          '**1-Click Detailed Literature Matrix Extracted (' + linkedCount + ' exact PDF sentences anchored):**',
+          '**1-Click Detailed Literature Matrix Extracted (' + linkedCount + ' exact PDF sentences anchored; mode: ' + paper.matrixRow.extractionMode + '):**',
+          (unverifiedCount ? '- **Not found in the PDF:** ' + unverifiedCount + ' statement(s) marked [!]. Check them against the paper before use.' : '- **All statements were matched to PDF text.**'),
+          (wasTruncated ? '- **Warning:** this paper was longer than the AI limit, so its middle part was not read.' : ''),
           '- **Setting & Population:** ' + paper.matrixRow.settingPopulation,
           '- **Problem & Objective:** ' + paper.matrixRow.problemObjective,
           '- **Theoretical Framework:** ' + paper.matrixRow.theoreticalFramework,
@@ -497,7 +576,7 @@
         ].join('\n');
         appendChatMessage('assistant', summaryMd, true);
         openMatrixModal();
-        KM.showToast('Extracted 10-dimension matrix with ' + linkedCount + ' anchored highlights!', 'success');
+        KM.showToast('Extracted matrix: ' + linkedCount + ' anchored highlights' + (unverifiedCount ? ', ' + unverifiedCount + ' not found in the PDF [!]' : '') + '.', unverifiedCount ? 'info' : 'success');
       }
     } catch (err) {
       console.error('Auto Matrix error:', err);
@@ -511,6 +590,7 @@
   }
 
   // ==================== CROSS-PAPER SYNTHESIS GENERATOR ====================
+  var AI_NOTE = '<div class="ai-written-note">AI-written text: not anchored to the PDFs. Check every statement against the matrix highlights before use.</div>';
   async function runCrossPaperSynthesis() {
     var rows = KM.state.matrixRows || [];
     if (!rows.length) {
@@ -560,11 +640,12 @@
         '2. **Contradictions & Methodological Differences** (divergent outcomes, sample biases, or design contrasts)',
         '3. **Recurring Research Gaps** (unanswered questions synthesized from their limitations)',
         '4. **Draft Literature Review Narrative** (1–2 cohesive academic paragraphs integrating all studies with in-text citations)',
+        'Use ONLY the information in the studies below. Do not add numbers, findings, authors or citations that are not given. Ignore any statement marked [!] (not found in the paper). If something is not reported, say so.',
         '\nStudies:\n' + cleanDataset
       ].join('\n');
 
       var reply = await callGeminiAPI(synthPrompt);
-      contentEl.innerHTML = formatMarkdownWithBadges(reply);
+      contentEl.innerHTML = AI_NOTE + formatMarkdownWithBadges(reply);
       KM.showToast('Cross-paper literature synthesis complete!', 'success');
     } catch (err) {
       contentEl.innerHTML = '<div class="text-rose-400">Synthesis error: ' + KM.escapeHtml(err.message) + '</div>';
@@ -602,13 +683,14 @@
     return 'Click to open PDF & jump to [' + citeTarget + ']';
   }
 
+  var UNVERIFIED_CHIP = '<span class="unverified-chip" title="Not found in the PDF text. Check this statement against the paper before use.">[!]</span>';
   function formatMatrixCell(text, paperId) {
     var safe = KM.escapeHtml(text || '—');
     var paper = (KM.state && KM.state.papers) ? KM.state.papers.find(function (p) { return p.id === paperId; }) : null;
 
     safe = safe.replace(/\[([S\d\s|,P.]+?)\]/gi, function (fullMatch, inner) {
       if (/^\d{1,2}$/.test(inner.trim())) return fullMatch;
-      var sMatches = inner.match(/S\d{3}/gi);
+      var sMatches = inner.match(/S\d{3,5}/gi);
       if (sMatches && sMatches.length) {
         return sMatches.map(function (sTag) {
           var sId = sTag.toUpperCase();
@@ -630,12 +712,143 @@
       return fullMatch;
     });
 
+    safe = safe.replace(/\[!\]/g, UNVERIFIED_CHIP);
     safe = safe.replace(/\[(\d{1,2})\]/g, function (_, num) {
       var tip = getCitationTooltip(paper, num, paperId);
       return '<button type="button" contenteditable="false" title="' + KM.escapeHtml(tip) + '" data-matrix-paper="' + KM.escapeHtml(paperId) + '" data-matrix-cite="' + num + '" class="cite-jump-chip">[' + num + ']</button>';
     });
 
     return safe;
+  }
+
+  // ==================== v24: REVIEW STATUS AND ALTERNATIVE SENTENCES ====================
+  function reviewChipHtml(paperId, fieldKey, fe) {
+    var st = fe.status || 'auto';
+    var label = st === 'checked' ? '\u2713 checked' : (st === 'edited' ? 'edited by hand' : 'auto');
+    var tip = st === 'checked' ? 'You checked this cell. Click to mark it as not checked.'
+      : (st === 'edited' ? 'You typed this text yourself, so it is no longer an exact PDF quote. Click when checked.'
+      : 'Chosen automatically. Read it against the PDF, then click to mark it checked.');
+    return '<button type="button" class="review-chip review-' + st + '" title="' + KM.escapeHtml(tip) + '" data-review-paper="' + KM.escapeHtml(paperId) + '" data-review-field="' + KM.escapeHtml(fieldKey) + '">' + label + '</button>';
+  }
+
+  function alternativesPanelHtml(panelId, paperId, fieldKey, fe, store) {
+    var btn = function (action, label, sid, badge, cls) {
+      return '<button type="button" class="alt-btn ' + (cls || '') + '" data-swap-paper="' + KM.escapeHtml(paperId) + '" data-swap-field="' + KM.escapeHtml(fieldKey) + '" data-swap-action="' + action + '" data-swap-sid="' + KM.escapeHtml(sid || '') + '" data-swap-badge="' + (badge || 0) + '">' + label + '</button>';
+    };
+    var meta = function (e) {
+      return '<span class="alt-meta">p. ' + (e.pageNum || '?') + (e.section ? ' \u00b7 ' + KM.escapeHtml(e.section) : '') + (e.cites ? ' \u00b7 cites other work' : '') + '</span>';
+    };
+    var html = '<div id="' + panelId + '" class="alt-panel hidden">';
+    if ((fe.ids || []).length) {
+      html += '<div class="alt-head">In this cell</div>';
+      fe.ids.forEach(function (sid, i) {
+        var e = store[sid] || {};
+        html += '<div class="alt-item">' + meta(e) + ' <span class="alt-badge">[' + fe.badges[i] + ']</span> ' + KM.escapeHtml(e.quote || sid) +
+          '<div class="alt-actions">' + btn('remove', 'Remove', sid, fe.badges[i], 'alt-remove') + '</div></div>';
+      });
+    }
+    if ((fe.candidates || []).length) {
+      html += '<div class="alt-head">Other sentences from the PDF</div>';
+      fe.candidates.forEach(function (sid) {
+        var e = store[sid] || {};
+        var actions = (fe.ids || []).map(function (_, i) { return btn('replace', 'Use instead of [' + fe.badges[i] + ']', sid, fe.badges[i]); }).join('') + btn('add', 'Add to cell', sid, 0);
+        html += '<div class="alt-item">' + meta(e) + ' ' + KM.escapeHtml(e.quote || sid) + '<div class="alt-actions">' + actions + '</div></div>';
+      });
+    } else {
+      html += '<div class="alt-head">No other sentences matched this field.</div>';
+    }
+    return html + '</div>';
+  }
+
+  function rowsForPaper(paperId) {
+    var row = (KM.state.matrixRows || []).find(function (r) { return r.paperId === paperId; });
+    var paper = (KM.state.papers || []).find(function (p) { return p.id === paperId; });
+    return { row: row, paper: paper };
+  }
+
+  function persistMatrixChange(paper, row) {
+    if (paper) { paper.matrixRow = row; paper.isDirty = true; }
+    if (KM.saveMatrixRowsToStorage) KM.saveMatrixRowsToStorage();
+    if (KM.saveWorkspaceToDb) KM.saveWorkspaceToDb();
+    renderMatrixTable();
+  }
+
+  function toggleFieldReview(paperId, fieldKey) {
+    var found = rowsForPaper(paperId);
+    var fe = found.row && found.row.fieldEvidence && found.row.fieldEvidence[fieldKey];
+    if (!fe) return;
+    fe.status = fe.status === 'checked' ? (fe.verbatim ? 'auto' : 'edited') : 'checked';
+    persistMatrixChange(found.paper, found.row);
+  }
+
+  // Replace, add or remove one exact PDF sentence in a field; the cell is rebuilt from the PDF text, never retyped
+  function swapFieldEvidence(paperId, fieldKey, action, sid, badge) {
+    var found = rowsForPaper(paperId);
+    var row = found.row;
+    var fe = row && row.fieldEvidence && row.fieldEvidence[fieldKey];
+    var store = (row && row.sentenceStore) || {};
+    if (!fe) return;
+    if ((action === 'replace' || action === 'add') && !store[sid]) return;
+    row.evidenceMap = row.evidenceMap || {};
+    var nextBadge = function () {
+      var max = 0;
+      Object.keys(row.evidenceMap).forEach(function (k) { var n = parseInt(k, 10); if (n > max) max = n; });
+      return max + 1;
+    };
+    var category = COL_STYLE[FIELD_RULES[fieldKey].col];
+    var paper = found.paper;
+    var dropHighlight = function (b) {
+      if (!paper) return;
+      paper.highlights = (paper.highlights || []).filter(function (h) { return !(h.isAutoMatrix && String(h.citationNum) === String(b)); });
+    };
+    var addHighlight = function (b, id) {
+      var e = store[id];
+      row.evidenceMap[String(b)] = { pageNum: e.pageNum, category: category, sentenceId: id, quote: e.quote, rects: e.rects || [] };
+      if (paper && (e.rects || []).length) {
+        paper.highlights.push({ id: 'auto_' + paper.id + '_' + b + '_' + Date.now(), pageNum: e.pageNum, category: category, citationNum: b, isAutoMatrix: true, sentenceId: id, quote: e.quote, rects: e.rects });
+      }
+    };
+    var pages = {};
+    var idx = fe.badges.indexOf(badge);
+    if (action === 'replace' && idx !== -1) {
+      var oldId = fe.ids[idx];
+      var nb = nextBadge();
+      dropHighlight(badge);
+      if (store[oldId]) pages[store[oldId].pageNum] = 1;
+      fe.ids[idx] = sid; fe.badges[idx] = nb;
+      addHighlight(nb, sid);
+      fe.candidates = [oldId].concat((fe.candidates || []).filter(function (x) { return x !== sid && x !== oldId; }));
+    } else if (action === 'add') {
+      var nb2 = nextBadge();
+      fe.ids.push(sid); fe.badges.push(nb2);
+      addHighlight(nb2, sid);
+      fe.candidates = (fe.candidates || []).filter(function (x) { return x !== sid; });
+    } else if (action === 'remove' && idx !== -1) {
+      var remId = fe.ids[idx];
+      dropHighlight(badge);
+      if (store[remId]) pages[store[remId].pageNum] = 1;
+      fe.ids.splice(idx, 1); fe.badges.splice(idx, 1);
+      fe.candidates = [remId].concat((fe.candidates || []).filter(function (x) { return x !== remId; }));
+    } else {
+      return;
+    }
+    if (store[sid]) pages[store[sid].pageNum] = 1;
+    row[fieldKey] = fe.ids.length
+      ? fe.ids.map(function (id, i) { return String(store[id].quote).trim() + ' [' + fe.badges[i] + ']'; }).join(' ')
+      : 'Not reported.';
+    fe.verbatim = true;
+    fe.status = 'checked';   // you chose this sentence yourself
+    if (paper && KM.renderPageAnnotations) Object.keys(pages).forEach(function (pg) { KM.renderPageAnnotations(paper, parseInt(pg, 10)); });
+    persistMatrixChange(paper, row);
+    if (paper && KM.renderTabs) KM.renderTabs();
+    KM.showToast(FIELD_LABELS[fieldKey] + ': cell updated from the PDF and marked checked.', 'success');
+  }
+
+  function reviewSummary(row) {
+    var fe = row.fieldEvidence || {};
+    var keys = Object.keys(fe);
+    var checked = keys.filter(function (k) { return fe[k].status === 'checked'; }).length;
+    return { checked: checked, total: keys.length };
   }
 
   function renderMatrixTable() {
@@ -657,14 +870,31 @@
       '<th class="py-3.5 px-3.5 text-rose-400 w-[20%]">5. Critical Evaluation &amp; Relevance</th>' +
       '</tr></thead><tbody class="divide-y divide-zinc-800/90">';
 
+    var currentRow = null;
+    var currentRowIdx = -1;
     function subBlock(paperId, fieldKey, label, colorClass, contentHtml) {
-      return '<div class="mb-2.5 last:mb-0">' +
-        '<div class="text-[10px] font-bold uppercase tracking-wider ' + colorClass + ' mb-0.5">' + label + '</div>' +
+      var fe = currentRow && currentRow.fieldEvidence && currentRow.fieldEvidence[fieldKey];
+      var head = '<div class="flex items-center gap-1.5 flex-wrap mb-0.5"><span class="text-[10px] font-bold uppercase tracking-wider ' + colorClass + '">' + label + '</span>';
+      var panel = '';
+      if (fe) {
+        head += reviewChipHtml(paperId, fieldKey, fe);
+        var nAlt = (fe.candidates || []).length;
+        if (nAlt || (fe.ids || []).length) {
+          var panelId = 'alt-' + currentRowIdx + '-' + fieldKey;
+          head += '<button type="button" class="alt-toggle" data-alt-target="' + panelId + '" title="Show other sentences from the PDF for this field">\u21C4 ' + nAlt + ' alternative' + (nAlt === 1 ? '' : 's') + '</button>';
+          panel = alternativesPanelHtml(panelId, paperId, fieldKey, fe, currentRow.sentenceStore || {});
+        }
+      }
+      head += '</div>';
+      return '<div class="mb-2.5 last:mb-0">' + head +
         '<div contenteditable="true" data-edit-paper="' + KM.escapeHtml(paperId) + '" data-edit-field="' + KM.escapeHtml(fieldKey) + '" class="text-zinc-200 leading-relaxed rounded px-1 -mx-1 hover:bg-zinc-800/60 focus:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 transition">' + contentHtml + '</div>' +
+        panel +
         '</div>';
     }
 
     rows.forEach(function (r, rowIdx) {
+      currentRow = r;
+      currentRowIdx = rowIdx;
       var bibHtml = '<div contenteditable="true" data-edit-paper="' + KM.escapeHtml(r.paperId) + '" data-edit-field="authors" class="font-bold text-indigo-300 text-xs leading-snug rounded px-1 -mx-1 focus:bg-zinc-800 focus:outline-none">' + KM.escapeHtml(r.authors) + '</div>' +
         '<div contenteditable="true" data-edit-paper="' + KM.escapeHtml(r.paperId) + '" data-edit-field="title" class="text-[11px] text-zinc-300 mt-1 leading-snug rounded px-1 -mx-1 focus:bg-zinc-800 focus:outline-none">' + KM.escapeHtml(r.title) + '</div>';
       if (r.journal) {
@@ -682,6 +912,7 @@
             (KM.state.papers.some(function (p) { return p.id === r.paperId; })
               ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 text-[10px] font-semibold"><i class="ph-bold ph-check"></i> ' + (r.linkedCount || 0) + ' PDF links active</span>'
               : '<button type="button" data-reopen-paper="' + KM.escapeHtml(r.paperId) + '" title="Re-open this PDF & restore highlights" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/35 text-[10px] font-semibold transition cursor-pointer"><i class="ph-bold ph-arrow-square-out"></i> Re-open PDF</button>') +
+            (r.fieldEvidence ? (function () { var rs = reviewSummary(r); return '<span class="review-progress' + (rs.checked === rs.total ? ' done' : '') + '" title="Cells you have checked">' + rs.checked + '/' + rs.total + ' checked</span>'; })() : '') +
             '<button type="button" data-delete-matrix-idx="' + rowIdx + '" title="Remove this study from Matrix" class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[10px] font-semibold transition cursor-pointer"><i class="ph-bold ph-trash"></i> Remove</button>' +
           '</div>' +
         '</td>' +
@@ -707,11 +938,36 @@
     html += '</tbody></table>';
     container.innerHTML = html;
 
+    container.querySelectorAll('[data-review-paper]').forEach(function (btn) {
+      btn.addEventListener('click', function () { toggleFieldReview(btn.dataset.reviewPaper, btn.dataset.reviewField); });
+    });
+    container.querySelectorAll('[data-alt-target]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var panelEl = document.getElementById(btn.dataset.altTarget);
+        if (panelEl) panelEl.classList.toggle('hidden');
+      });
+    });
+    container.querySelectorAll('[data-swap-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        swapFieldEvidence(btn.dataset.swapPaper, btn.dataset.swapField, btn.dataset.swapAction, btn.dataset.swapSid || '', parseInt(btn.dataset.swapBadge || '0', 10));
+      });
+    });
+
     container.querySelectorAll('[data-edit-paper]').forEach(function (el) {
       el.addEventListener('blur', function () {
         var pId = el.dataset.editPaper;
         var field = el.dataset.editField;
         var newVal = el.innerText.trim();
+        var squashTxt = function (x) { return String(x || '').replace(/\s+/g, ' ').trim(); };
+        var rowNow = (KM.state.matrixRows || []).find(function (r) { return r.paperId === pId; });
+        if (rowNow && rowNow.fieldEvidence && rowNow.fieldEvidence[field] && squashTxt(rowNow[field]) !== squashTxt(newVal)) {
+          rowNow.fieldEvidence[field].status = 'edited';     // typed by hand: no longer an exact PDF quote
+          rowNow.fieldEvidence[field].verbatim = false;
+          var chipEl = el.parentElement && el.parentElement.querySelector('[data-review-field="' + field + '"]');
+          if (chipEl) chipEl.outerHTML = reviewChipHtml(pId, field, rowNow.fieldEvidence[field]);
+          var newChip = el.parentElement && el.parentElement.querySelector('[data-review-field="' + field + '"]');
+          if (newChip) newChip.addEventListener('click', function () { toggleFieldReview(pId, field); });
+        }
         var paper = KM.state.papers.find(function (p) { return p.id === pId; });
         if (paper && paper.matrixRow && field) {
           paper.matrixRow[field] = newVal;
@@ -772,7 +1028,7 @@
     safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     safe = safe.replace(/\[([S\d\s|,P.]+?)\]/gi, function (fullMatch, inner) {
       if (/^\d{1,2}$/.test(inner.trim())) return fullMatch;
-      var sMatches = inner.match(/S\d{3}/gi);
+      var sMatches = inner.match(/S\d{3,5}/gi);
       if (sMatches && sMatches.length) {
         return sMatches.map(function (sTag) {
           var sId = sTag.toUpperCase();
@@ -833,7 +1089,7 @@
       ? '\nReferenced PDF Quote (Page ' + KM.state.pendingSelection.pageNum + '): "' + KM.state.pendingSelection.quote + '"\n'
       : '';
     var corpusCtx = (paper && paper.indexedCorpus)
-      ? '\nPaper: ' + paper.title + '\nTranscript:\n' + getBalancedTranscript(paper.indexedCorpus.indexedTranscript).slice(0, 24000)
+      ? '\nPaper: ' + paper.title + '\nTranscript:\n' + getBalancedTranscript(paper.indexedCorpus.indexedTranscript).slice(0, 200000)
       : (paper ? '\nPaper: ' + paper.title : '');
 
     if (!KM.state.apiKey) {
@@ -847,11 +1103,11 @@
     try {
       if (paper && !paper.indexedCorpus) {
         await KM.buildIndexedCorpusFromPdf(paper);
-        corpusCtx = '\nPaper: ' + paper.title + '\nTranscript:\n' + getBalancedTranscript(paper.indexedCorpus.indexedTranscript).slice(0, 24000);
+        corpusCtx = '\nPaper: ' + paper.title + '\nTranscript:\n' + getBalancedTranscript(paper.indexedCorpus.indexedTranscript).slice(0, 200000);
       }
-      var prompt = 'You are an academic research assistant inside KM-Reader Studio. Be concise, scholarly, and accurate.' + quoteCtx + corpusCtx + '\n\nUser Question: ' + q;
+      var prompt = 'You are an academic research assistant inside KM-Reader Studio. Be concise, scholarly, and accurate. Answer only from the paper transcript below and put the sentence ID, e.g. [S012], after every fact. If the paper does not say it, answer "Not reported in this paper".' + quoteCtx + corpusCtx + '\n\nUser Question: ' + q;
       var reply = await callGeminiAPI(prompt);
-      appendChatMessage('assistant', reply, false);
+      appendChatMessage('assistant', reply + '\n\nAI-written answer: click the [S...] chips to check each fact in the PDF.', false);
     } catch (err) {
       appendChatMessage('assistant', 'Gemini API Error: ' + err.message, false);
     }
@@ -1112,9 +1368,12 @@
       }
       var bundle = {
         app: 'KM-Reader-Studio',
-        version: '5.0',
+        version: '6.0',
         exportedAt: new Date().toISOString(),
-        rows: rows
+        note: 'fieldEvidence[field].status: auto = chosen by the app, checked = confirmed by the reader, edited = typed by hand (not an exact quote). sentenceStore holds the exact PDF text and page of every sentence used or offered.',
+        rows: rows.map(function (r) {
+          return Object.assign({ mendeleyKey: r.mendeleyKey || String(r.fileName || '').replace(/\.pdf$/i, '').split(' - ')[0].trim() }, r);
+        })
       };
       KM.downloadBlobFile('KM-Reader-Matrix-Archive.json', JSON.stringify(bundle, null, 2), 'application/json;charset=utf-8');
       KM.showToast('Saved portable Matrix JSON (' + rows.length + ' studies)!', 'success');
@@ -1149,26 +1408,29 @@
             return out;
           };
           var grid = parseCsv(text);
+          var hasKeyCol = grid[0] && String(grid[0][0] || '').trim().toLowerCase() === 'key';
+          var off = hasKeyCol ? 2 : 0;
           for (var rIdx = 1; rIdx < grid.length; rIdx++) {
             var cols = grid[rIdx];
-            if (!cols || cols.length < 2 || !cols.join('').trim()) continue;
+            if (!cols || cols.length < (2 + off) || !cols.join('').trim()) continue;
             importedRows.push({
               paperId: 'imported_' + Date.now() + '_' + rIdx,
-              paperName: cols[1] || 'Imported Study',
-              authors: cols[0] || '',
-              title: cols[1] || '',
-              journal: cols[2] || '',
-              doi: cols[3] || '',
+              mendeleyKey: hasKeyCol ? (cols[0] || '') : '',
+              paperName: cols[1 + off] || 'Imported Study',
+              authors: cols[0 + off] || '',
+              title: cols[1 + off] || '',
+              journal: cols[2 + off] || '',
+              doi: cols[3 + off] || '',
               linkedCount: 0,
-              settingPopulation: cols[4] || '',
-              problemObjective: cols[5] || '',
-              theoreticalFramework: cols[6] || '',
-              studyDesign: cols[7] || '',
-              dataAnalysis: cols[8] || '',
-              mainResults: cols[9] || '',
-              conclusions: cols[10] || '',
-              strengthsLimitations: cols[11] || '',
-              connectionRelevance: cols[12] || ''
+              settingPopulation: cols[4 + off] || '',
+              problemObjective: cols[5 + off] || '',
+              theoreticalFramework: cols[6 + off] || '',
+              studyDesign: cols[7 + off] || '',
+              dataAnalysis: cols[8 + off] || '',
+              mainResults: cols[9 + off] || '',
+              conclusions: cols[10 + off] || '',
+              strengthsLimitations: cols[11 + off] || '',
+              connectionRelevance: cols[12 + off] || ''
             });
           }
         }
@@ -1247,9 +1509,12 @@
         KM.showToast('No matrix rows to export.', 'error');
         return;
       }
-      var lines = ['"Author(s) & Year","Title","Journal","DOI","Setting / Population","Research Problem & Question","Theoretical Framework","Study Design","Data Collection & Analysis","Main Results","Authors Conclusions","Strengths & Limitations","Connection & Relevance"'];
+      var lines = ['"Key","Cells checked","Author(s) & Year","Title","Journal","DOI","Setting / Population","Research Problem & Question","Theoretical Framework","Study Design","Data Collection & Analysis","Main Results","Authors Conclusions","Strengths & Limitations","Connection & Relevance"'];
       rows.forEach(function (r) {
+        var rs = r.fieldEvidence ? reviewSummary(r) : null;
         var vals = [
+          r.mendeleyKey || String(r.fileName || '').replace(/\.pdf$/i, '').split(' - ')[0].trim(),
+          rs ? rs.checked + '/' + rs.total : '',
           r.authors, r.title, r.journal, r.doi, r.settingPopulation,
           r.problemObjective, r.theoreticalFramework, r.studyDesign, r.dataAnalysis,
           r.mainResults, r.conclusions, r.strengthsLimitations, r.connectionRelevance
@@ -1649,6 +1914,11 @@
       KM.state.model = modSel ? modSel.value : 'gemini-3.5-flash-lite';
       localStorage.setItem('km_gemini_api_key', KM.state.apiKey);
       localStorage.setItem('km_gemini_model', KM.state.model);
+      var strictBox = KM.$('strictVerbatimToggle');
+      if (strictBox) {
+        KM.state.strictVerbatim = strictBox.checked;
+        try { localStorage.setItem('km_strict_verbatim', strictBox.checked ? '1' : '0'); } catch (e) {}
+      }
       updateApiStatusUi();
       closeApiSettingsModal();
       KM.showToast('Saved Gemini settings (' + KM.state.model + ')', 'success');

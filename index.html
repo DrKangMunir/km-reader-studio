@@ -17,15 +17,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
   
   <!-- PDF.js & PDF-Lib Engines -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=24" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
@@ -449,6 +449,11 @@
           </div>
         </div>
 
+        <label class="flex items-start gap-2.5 p-3 rounded-xl bg-[#121216] border border-zinc-700 text-xs text-zinc-300 cursor-pointer">
+          <input id="strictVerbatimToggle" type="checkbox" checked class="mt-0.5 accent-indigo-500" />
+          <span><strong class="text-zinc-100">Verbatim matrix (recommended)</strong><br>Matrix cells show only exact sentences copied from the PDF; the AI only chooses which sentences. Turn off to keep the AI's own wording: every number is then checked against the cited sentence, and anything not found in the PDF is marked <span class="unverified-chip">[!]</span>.</span>
+        </label>
+
         <div id="apiTestStatusBox" class="hidden p-2.5 rounded-xl text-xs border"></div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
@@ -550,7 +555,7 @@
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
-            <p class="text-[11px] text-zinc-400">KM-Reader Studio v22 — Local-First Research Workspace</p>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v24 — Local-First Research Workspace</p>
           </div>
         </div>
         <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
@@ -653,8 +658,8 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js?v=22"></script>
-  <script src="js/matrix-ai.js?v=22"></script>
+  <script src="js/pdf-engine.js?v=24"></script>
+  <script src="js/matrix-ai.js?v=24"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', function () {

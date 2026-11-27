@@ -1,12 +1,12 @@
-const CACHE_NAME = 'km-reader-studio-v22';
+const CACHE_NAME = 'km-reader-studio-v24';
 const APP_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=22',
+  './styles.css?v=24',
   './js/security-lock.js',
   './js/installers.js',
-  './js/pdf-engine.js?v=22',
-  './js/matrix-ai.js?v=22',
+  './js/pdf-engine.js?v=24',
+  './js/matrix-ai.js?v=24',
   './manifest.json'
 ];
 
@@ -35,18 +35,16 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.hostname.includes('generativelanguage.googleapis.com')) return;
 
+  // v24: network first, so an updated app is used at once; the cache is only the offline fallback
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkFetch = fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

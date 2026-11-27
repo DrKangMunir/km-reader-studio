@@ -294,3 +294,28 @@ body.is-resizing-split iframe,
 body.is-resizing-split canvas {
   pointer-events: none !important;
 }
+
+/* v23: statement not found in the PDF text */
+.unverified-chip { display: inline-block; padding: 0 5px; margin: 0 1px; border-radius: 6px; font-weight: 700; font-size: 10px;
+  color: #fecaca; background: rgba(220, 38, 38, 0.28); border: 1px solid rgba(248, 113, 113, 0.6); cursor: help; }
+.ai-written-note { margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; font-size: 11px;
+  color: #fde68a; background: rgba(217, 119, 6, 0.15); border: 1px solid rgba(217, 119, 6, 0.45); }
+
+/* v24: review status and alternative sentences */
+.review-chip { padding: 0 6px; border-radius: 999px; font-size: 9.5px; font-weight: 700; line-height: 16px; border: 1px solid; cursor: pointer; }
+.review-auto { color: #fcd34d; background: rgba(217, 119, 6, 0.14); border-color: rgba(217, 119, 6, 0.45); }
+.review-checked { color: #6ee7b7; background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.5); }
+.review-edited { color: #c4b5fd; background: rgba(139, 92, 246, 0.16); border-color: rgba(139, 92, 246, 0.5); }
+.alt-toggle { padding: 0 6px; border-radius: 999px; font-size: 9.5px; font-weight: 600; line-height: 16px; color: #a5b4fc; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.4); cursor: pointer; }
+.alt-toggle:hover { background: rgba(99, 102, 241, 0.25); }
+.alt-panel { margin-top: 6px; padding: 8px; border-radius: 10px; background: #15151b; border: 1px solid #2e2e38; max-height: 320px; overflow-y: auto; }
+.alt-head { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #a1a1aa; margin: 4px 0; }
+.alt-item { font-size: 11px; color: #d4d4d8; padding: 6px; border-radius: 8px; margin-bottom: 4px; background: #1c1c24; line-height: 1.45; }
+.alt-meta { font-size: 9.5px; color: #7dd3fc; font-weight: 600; }
+.alt-badge { font-size: 10px; color: #a5b4fc; font-weight: 700; }
+.alt-actions { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+.alt-btn { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 6px; color: #e0e7ff; background: rgba(79, 70, 229, 0.35); border: 1px solid rgba(129, 140, 248, 0.5); cursor: pointer; }
+.alt-btn:hover { background: rgba(79, 70, 229, 0.6); }
+.alt-remove { color: #fecaca; background: rgba(220, 38, 38, 0.25); border-color: rgba(248, 113, 113, 0.5); }
+.review-progress { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; color: #fcd34d; background: rgba(217, 119, 6, 0.12); border: 1px solid rgba(217, 119, 6, 0.4); }
+.review-progress.done { color: #6ee7b7; background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.45); }

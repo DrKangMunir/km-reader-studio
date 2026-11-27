@@ -73,7 +73,25 @@
   KM.saveMatrixRowsToStorage = function () {
     try {
       localStorage.setItem('km_saved_matrix_rows', JSON.stringify(KM.state.matrixRows || []));
-    } catch (e) {}
+    } catch (e) {
+      // v24: browser storage full: keep the matrix, drop only the highlight boxes of unused alternative sentences
+      try {
+        var slim = (KM.state.matrixRows || []).map(function (r) {
+          if (!r.sentenceStore) return r;
+          var used = {};
+          Object.keys(r.fieldEvidence || {}).forEach(function (f) { (r.fieldEvidence[f].ids || []).forEach(function (id) { used[id] = 1; }); });
+          var store = {};
+          Object.keys(r.sentenceStore).forEach(function (id) {
+            var e = r.sentenceStore[id];
+            store[id] = used[id] ? e : { pageNum: e.pageNum, quote: e.quote, section: e.section, rects: [] };
+          });
+          return Object.assign({}, r, { sentenceStore: store });
+        });
+        localStorage.setItem('km_saved_matrix_rows', JSON.stringify(slim));
+      } catch (e2) {
+        if (!KM._storageWarned) { KM._storageWarned = true; KM.showToast('Browser storage is full: export the matrix as JSON to keep a copy.', 'error'); }
+      }
+    }
   };
 
   KM.upsertMatrixRow = function (row) {
@@ -108,6 +126,8 @@
     activeCategory: 'objective',
     apiKey: localStorage.getItem('km_gemini_api_key') || '',
     model: localStorage.getItem('km_gemini_model') || 'gemini-3.5-flash-lite',
+    // v23: verbatim mode (default on) fills matrix cells only with exact PDF sentences
+    strictVerbatim: localStorage.getItem('km_strict_verbatim') !== '0',
     pendingSelection: null,
     searchMatches: [],
     searchIndex: -1,
@@ -687,6 +707,26 @@
     var page1RawText = '';
     var seq = 1;
 
+    // v24: section labels and citation flags for every indexed sentence
+    var currentSection = 'front';
+    var lastEntry = null;
+    var abstractCarry = null;
+    var HEADING_RX = /^(?:\d+(?:\.\d+)*\.?\s*)?(abstract|summary|introduction|background|methods?|materials and methods|patients and methods|subjects and methods|participants and methods|methodology|results(?: and discussion)?|findings|discussion|limitations|strengths and limitations|study limitations|strengths and weaknesses|conclusions?|concluding remarks|references|bibliography|literature cited|acknowledge?ments?|funding|declarations?|competing interests|conflicts? of interest|author contributions|abbreviations)\s*:?$/i;
+    var LABEL_RX = /^(?:abstract\s*[:.\-]?\s*)?(background|introduction|objectives?|aims?|purpose|methods?|study design|design|setting|participants|results?|findings|conclusions?|discussion)\s*:/i;
+    var CITE_RX = /\bet al\b|\(\s*[A-Z][^()]{0,80}?\b(?:19|20)\d{2}[a-z]?\s*\)|\[\s*\d{1,3}(?:\s*[,\u2013-]\s*\d{1,3})*\s*\]|\b(?:previous|prior|earlier|other|past) (?:studies|study|research|reports?|surveys?)\b|\b(?:consistent|in line|in agreement|similar|comparable) (?:with|to)\b/i;
+    function sectionName(word) {
+      var w = String(word || '').toLowerCase();
+      if (/^(abstract|summary)$/.test(w)) return 'abstract';
+      if (/^(introduction|background|objectives?|aims?|purpose)$/.test(w)) return 'introduction';
+      if (/method|design|setting|participants/.test(w)) return 'methods';
+      if (/^(results|result|findings|results and discussion)$/.test(w)) return 'results';
+      if (w === 'discussion') return 'discussion';
+      if (/limitation|weakness/.test(w)) return 'limitations';
+      if (/conclu/.test(w)) return 'conclusion';
+      if (/^(references|bibliography|literature cited)$/.test(w)) return 'references';
+      return 'backmatter';
+    }
+
     for (var pageNum = 1; pageNum <= paper.numPages; pageNum++) {
       await new Promise(function (resolve) { setTimeout(resolve, 0); });
       var page = await paper.pdfDoc.getPage(pageNum);
@@ -724,11 +764,21 @@
           yPct: Math.max(0, yTop / pageH),
           wPct: Math.min(1, w / pageW),
           hPct: Math.min(1, (fontH * 1.15) / pageH),
-          col: 0
+          col: 0,
+          fh: fontH
         });
       });
 
       if (!rawItems.length) continue;
+
+      var fhs = rawItems.map(function (it) { return it.fh; }).sort(function (a, b) { return a - b; });
+      var medFh = fhs[Math.floor(fhs.length / 2)] || 10;
+      rawItems.forEach(function (it) {
+        var t = it.rawText.trim();
+        it.sup = /^\d{1,3}(?:\s*[,\u2013-]\s*\d{1,3})*$/.test(t) && it.fh < medFh * 0.82;   // superscript reference number
+        var hm = t.length <= 60 ? t.match(HEADING_RX) : null;
+        it.heading = hm ? sectionName(hm[1]) : null;
+      });
 
       var isTwoCol = leftCount >= 14 && rightCount >= 14;
       var twoColStartY = pageH;
@@ -753,10 +803,15 @@
         if (Math.abs(a.y - b.y) > 4.5) return a.y - b.y;
         return a.x - b.x;
       });
+      rawItems.forEach(function (it, idx) { it.idx = idx; });
+      var pageStartSection = currentSection;
+      var headingMarks = [];
 
       var fullText = '';
       var charToItem = [];
       var prevIt = null;
+      var covered = new Set();   // text items already inside a registered sentence (v23)
+      var markCovered = function (arr) { arr.forEach(function (x) { covered.add(x); }); };
 
       rawItems.forEach(function (it) {
         var clean = it.rawText.replace(/\s+/g, ' ');
@@ -771,6 +826,7 @@
           fullText += ' ';
           charToItem.push(it);
         }
+        if (it.heading) headingMarks.push({ pos: fullText.length, idx: it.idx, section: it.heading });
         for (var c = 0; c < clean.length; c++) {
           fullText += clean[c];
           charToItem.push(it);
@@ -781,6 +837,29 @@
       if (pageNum === 1) {
         page1RawText = fullText;
       }
+
+      var sectionAtPos = function (pos) { var sec = pageStartSection; headingMarks.forEach(function (m) { if (m.pos <= pos) sec = m.section; }); return sec; };
+      var sectionAtIdx = function (idx) { var sec = pageStartSection; headingMarks.forEach(function (m) { if (m.idx <= idx) sec = m.section; }); return sec; };
+      var addEntry = function (id, text, items, rects, startPos, kind) {
+        var lab = text.match(LABEL_RX);
+        var baseSection = kind === 'line' ? sectionAtIdx(items[0].idx) : sectionAtPos(startPos);
+        var inAbstract = baseSection === 'abstract' || baseSection === 'front';
+        // structured abstracts: "Objectives:", "Results:" etc. label every sentence until the next label
+        if (lab && !kind) abstractCarry = inAbstract ? sectionName(lab[1]) : null;
+        if (!inAbstract) abstractCarry = null;
+        var section = lab ? sectionName(lab[1]) : ((inAbstract && abstractCarry) ? abstractCarry : baseSection);
+        var leadSup = Boolean(items.length && items[0].sup);
+        if (leadSup && lastEntry && !kind) lastEntry.cites = true;   // a reference number printed after the full stop belongs to the sentence before
+        var midSup = items.some(function (x, i) { return x.sup && !(i === 0 && leadSup); });
+        var cites = midSup || CITE_RX.test(text);
+        var entry = { id: id, pageNum: pageNum, text: text, rects: rects, section: section, cites: cites };
+        if (kind) entry.kind = kind;
+        sentenceRegistry[id] = entry;
+        lastEntry = entry;
+        if (section !== 'references' && section !== 'backmatter') {
+          promptLines.push('[' + id + ' | P.' + pageNum + ' | ' + section + (cites ? ' | cites other work' : '') + (kind === 'line' ? ' | table/line' : '') + '] ' + text);
+        }
+      };
 
       var abbrevRegex = /^(?:et al|fig|figs|table|vs|e\.g|i\.e|eg|ie|dr|mr|mrs|prof|no|vol|pp|st|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|[a-zA-Z])$/i;
       var wordBeforeRegex = /[a-zA-Z]+$/;
@@ -803,8 +882,8 @@
             var sRects = groupItemsIntoLineRects(sMatched);
             if (sRects.length) {
               var segId = 'S' + String(seq++).padStart(3, '0');
-              sentenceRegistry[segId] = { id: segId, pageNum: pageNum, text: seg, rects: sRects };
-              promptLines.push('[' + segId + ' | P.' + pageNum + '] ' + seg);
+              addEntry(segId, seg, sMatched, sRects, start);
+              markCovered(sMatched);
             }
           }
           start = i + 1;
@@ -850,13 +929,8 @@
               var rects = groupItemsIntoLineRects(matchedSet);
               if (rects.length) {
                 var sId = 'S' + String(seq++).padStart(3, '0');
-                sentenceRegistry[sId] = {
-                  id: sId,
-                  pageNum: pageNum,
-                  text: rawSent,
-                  rects: rects
-                };
-                promptLines.push('[' + sId + ' | P.' + pageNum + '] ' + rawSent);
+                addEntry(sId, rawSent, matchedSet, rects, startIdx);
+                markCovered(matchedSet);
               }
             }
 
@@ -886,16 +960,35 @@
           var remRects = groupItemsIntoLineRects(remMatched);
           if (remRects.length) {
             var rId = 'S' + String(seq++).padStart(3, '0');
-            sentenceRegistry[rId] = {
-              id: rId,
-              pageNum: pageNum,
-              text: remSent,
-              rects: remRects
-            };
-            promptLines.push('[' + rId + ' | P.' + pageNum + '] ' + remSent);
+            addEntry(rId, remSent, remMatched, remRects, remStart);
+            markCovered(remMatched);
           }
         }
       }
+
+      // v23: index table rows and other short numeric lines that the sentence splitter skips,
+      // so figures printed only in tables can be anchored and checked too.
+      var lines = [];
+      rawItems.forEach(function (it) {
+        if (covered.has(it)) return;
+        var line = null;
+        for (var li = lines.length - 1; li >= 0 && li >= lines.length - 6; li--) {
+          if (lines[li].col === it.col && Math.abs(lines[li].y - it.y) <= 4.5) { line = lines[li]; break; }
+        }
+        if (!line) { line = { col: it.col, y: it.y, items: [] }; lines.push(line); }
+        line.items.push(it);
+      });
+      lines.forEach(function (ln) {
+        ln.items.sort(function (a, b) { return a.x - b.x; });
+        var txt = ln.items.map(function (x) { return x.rawText.replace(/\s+/g, ' ').trim(); }).filter(Boolean).join(' ').trim();
+        if (txt.length < 3 || txt.length > 600 || !/\d/.test(txt)) return;
+        if (/^\d{1,4}$/.test(txt)) return;   // bare page numbers
+        var lRects = groupItemsIntoLineRects(ln.items);
+        if (!lRects.length) return;
+        var tId = 'S' + String(seq++).padStart(3, '0');
+        addEntry(tId, txt, ln.items, lRects, 0, 'line');
+      });
+      currentSection = sectionAtPos(Infinity);
     }
 
     paper.indexedCorpus = {
@@ -911,7 +1004,7 @@
     var allIds = Object.keys(registry || {});
     var sampleText = allIds.slice(0, 12).map(function (k) { return registry[k].text; }).join(' ');
     var yearMatch = cleanName.match(/(20\d{2}|19\d{2})/) || sampleText.match(/\b(202[0-6]|201\d|200\d)\b/);
-    var year = yearMatch ? yearMatch[1] : '2024';
+    var year = yearMatch ? yearMatch[1] : 'n.d.';   // v23: never guess a year
     var firstAuthor = cleanName.split(/[\s_-]+/)[0].replace(/\d{4}$/, '') || 'Author';
     var authors = firstAuthor + ' et al. (' + year + ')';
     var dashIdx = cleanName.indexOf(' - ');
