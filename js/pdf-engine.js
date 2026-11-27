@@ -37,7 +37,7 @@
     clearTimeout(KM.showToast._timer);
     KM.showToast._timer = setTimeout(function () {
       banner.classList.add('hidden');
-    }, 3200);
+    }, 5200);
   };
 
   KM.downloadBlobFile = function (filename, content, mime) {
@@ -394,7 +394,14 @@
     renderTabs();
     await renderActivePdfPages();
     KM.saveWorkspaceToDb();
-    KM.showToast('Loaded "' + paper.title + '" (' + paper.numPages + ' pages)', 'success');
+    KM.showToast('Loaded "' + paper.title + '" — Next: Click "Auto Matrix" in the top bar to extract your LR table!', 'success');
+    var autoBtn = KM.$('autoMatrixBtn');
+    if (autoBtn) {
+      autoBtn.classList.add('ring-2', 'ring-amber-300', 'ring-offset-2', 'ring-offset-[#18181d]');
+      setTimeout(function () {
+        autoBtn.classList.remove('ring-2', 'ring-amber-300', 'ring-offset-2', 'ring-offset-[#18181d]');
+      }, 4500);
+    }
   }
 
   // ==================== MULTI-PAGE PDF RENDERER ====================
@@ -1603,6 +1610,18 @@
       }
     });
 
+    // Quick Start Guide Modal Handlers
+    function closeGuideModal() {
+      var m = KM.$('quickGuideModal');
+      if (m) { m.classList.add('hidden'); m.style.display = ''; }
+    }
+    KM.on('openGuideModalBtn', 'click', function () {
+      var m = KM.$('quickGuideModal');
+      if (m) { m.classList.remove('hidden'); m.style.display = 'flex'; }
+    });
+    KM.on('closeGuideModalBtn', 'click', closeGuideModal);
+    KM.on('gotItGuideBtn', 'click', closeGuideModal);
+
     // About & Privacy Modal Handlers
     KM.on('openPrivacyModalBtn', 'click', function () {
       var m = KM.$('aboutPrivacyModal');
@@ -1702,5 +1721,16 @@
     });
 
     KM.restoreWorkspaceFromDb();
+    if (!KM.state.apiKey) {
+      var apiBtn = KM.$('openApiSettingsBtn');
+      if (apiBtn) {
+        apiBtn.classList.add('ring-2', 'ring-amber-400/80');
+      }
+      setTimeout(function () {
+        if (!KM.state.apiKey) {
+          KM.showToast('Start here: Click "Step 1: Setup Free API Key" (or "Gemini 3.5" above) to connect your free Google AI Studio key!', 'info');
+        }
+      }, 900);
+    }
   });
 })();

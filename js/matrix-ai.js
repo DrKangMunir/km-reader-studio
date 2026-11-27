@@ -10,7 +10,21 @@
     var modelSel = KM.$('geminiModelSelect');
     if (keyInput) keyInput.value = KM.state.apiKey;
     if (modelSel) modelSel.value = KM.state.model;
-    if (dot) dot.className = 'w-2 h-2 rounded-full ' + (KM.state.apiKey ? 'bg-emerald-400' : 'bg-amber-400');
+    if (dot) dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (KM.state.apiKey ? 'bg-emerald-400' : 'bg-amber-400');
+    var wBtn = KM.$('welcomeSetupApiBtn');
+    var wLbl = KM.$('welcomeApiBtnLabel');
+    var wCard = KM.$('welcomeStep1Card');
+    if (wBtn && wLbl) {
+      if (KM.state.apiKey) {
+        wBtn.className = 'w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer';
+        wLbl.textContent = 'AI Key Connected ✓';
+        if (wCard) wCard.className = 'p-3 rounded-2xl bg-[#121216] border border-emerald-500/40 relative';
+      } else {
+        wBtn.className = 'w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow transition cursor-pointer';
+        wLbl.textContent = 'Step 1: Setup Free API Key';
+        if (wCard) wCard.className = 'p-3 rounded-2xl bg-[#121216] border border-amber-500/40 relative';
+      }
+    }
     if (badge) {
       var isMobile = window.innerWidth < 640;
       var labels = isMobile ? {
