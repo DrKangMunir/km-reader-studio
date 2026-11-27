@@ -20,7 +20,7 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
@@ -461,7 +461,7 @@
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
-            <p class="text-[11px] text-zinc-400">KM-Reader Studio v9 — Local-First Research Workspace</p>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v13 — Local-First Research Workspace</p>
           </div>
         </div>
         <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
@@ -484,6 +484,16 @@
           <p class="text-[11px] text-zinc-400">
             When you configure your own Google AI Studio API key, text excerpts are sent directly from your device to Google's Gemini API over HTTPS. Offline matrix extraction works completely without an internet connection.
           </p>
+        </div>
+        <div class="pt-2 border-t border-zinc-800 flex flex-col sm:flex-row items-center gap-2">
+          <button id="shareAppBtn" type="button" class="w-full sm:flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-share-network"></i>
+            <span>Share App Link</span>
+          </button>
+          <a href="https://github.com/DrKangMunir/km-reader-studio/issues" target="_blank" rel="noopener noreferrer" class="w-full sm:flex-1 py-2 px-3 rounded-xl bg-[#222228] hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold flex items-center justify-center gap-1.5 transition">
+            <i class="ph-bold ph-chat-circle-dots text-amber-400"></i>
+            <span>Feedback / Bugs</span>
+          </a>
         </div>
       </div>
     </div>
@@ -554,7 +564,7 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js?v=12"></script>
-  <script src="js/matrix-ai.js?v=12"></script>
+  <script src="js/pdf-engine.js?v=13"></script>
+  <script src="js/matrix-ai.js?v=13"></script>
 </body>
 </html>
