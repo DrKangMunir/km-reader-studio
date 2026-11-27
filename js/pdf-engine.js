@@ -415,7 +415,10 @@
     if (emptyEl) emptyEl.classList.add('hidden');
     pagesEl.classList.remove('hidden');
     pagesEl.innerHTML = '';
-    if (railEl) railEl.classList.remove('hidden');
+    if (railEl) {
+      railEl.classList.remove('hidden');
+      if (KM.updateFloatingRailPosition) KM.updateFloatingRailPosition();
+    }
 
     var zoomLbl = KM.$('zoomPercentLabel');
     var totLbl = KM.$('totalPagesLabel');

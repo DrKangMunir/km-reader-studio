@@ -794,17 +794,62 @@
     }
   }
 
-  function toggleAiSidebar(forceState) {
+  function updateFloatingRailPosition() {
     var sb = KM.$('aiSidebar');
     var rail = KM.$('floatingZoomRail');
+    if (!rail) return;
+    var isDesktop = window.innerWidth >= 640;
+    var isOpen = sb && !sb.classList.contains('hidden') && sb.style.display !== 'none';
+    if (isDesktop && isOpen) {
+      var sbWidth = sb.getBoundingClientRect().width || parseInt(sb.style.width, 10) || 380;
+      rail.style.right = (Math.round(sbWidth) + 20) + 'px';
+    } else {
+      rail.style.right = '14px';
+    }
+  }
+
+  function applyAiSidebarWidth(pxWidth) {
+    var sb = KM.$('aiSidebar');
     if (!sb) return;
-    var shouldShow = typeof forceState === 'boolean' ? forceState : sb.classList.contains('hidden');
+    if (window.innerWidth < 640) {
+      sb.style.width = '100%';
+      updateFloatingRailPosition();
+      return;
+    }
+    var totalW = window.innerWidth || 1200;
+    var minW = 260;
+    var maxW = Math.max(340, Math.floor(totalW * 0.78));
+    var clamped = Math.min(maxW, Math.max(minW, Math.round(pxWidth)));
+    sb.style.width = clamped + 'px';
+    try {
+      localStorage.setItem('km_ai_sidebar_width', String(clamped));
+    } catch (e) {}
+    updateFloatingRailPosition();
+  }
+
+  function toggleAiSidebar(forceState) {
+    var sb = KM.$('aiSidebar');
+    var resizer = KM.$('aiSidebarResizer');
+    if (!sb) return;
+    var isCurrentlyHidden = sb.classList.contains('hidden') || sb.style.display === 'none';
+    var shouldShow = typeof forceState === 'boolean' ? forceState : isCurrentlyHidden;
     if (shouldShow) {
       sb.classList.remove('hidden');
-      if (rail) rail.classList.add('lg:right-[395px]');
+      sb.style.display = 'flex';
+      if (resizer && window.innerWidth >= 640) {
+        resizer.classList.remove('hidden');
+        resizer.style.display = 'block';
+      }
+      var savedW = parseInt(localStorage.getItem('km_ai_sidebar_width') || '380', 10);
+      applyAiSidebarWidth(savedW || 380);
     } else {
       sb.classList.add('hidden');
-      if (rail) rail.classList.remove('lg:right-[395px]');
+      sb.style.display = 'none';
+      if (resizer) {
+        resizer.classList.add('hidden');
+        resizer.style.display = 'none';
+      }
+      updateFloatingRailPosition();
     }
   }
 
@@ -825,6 +870,7 @@
   KM.openApiSettingsModal = openApiSettingsModal;
   KM.closeApiSettingsModal = closeApiSettingsModal;
   KM.toggleAiSidebar = toggleAiSidebar;
+  KM.updateFloatingRailPosition = updateFloatingRailPosition;
 
   window.runAutoMatrixForPaper = function () {
     return runAutoMatrixForPaper(KM.getActivePaper(), false);
@@ -838,6 +884,76 @@
   document.addEventListener('DOMContentLoaded', function () {
     updateApiStatusUi();
     updateMatrixCountBadge();
+
+    // Initialize saved AI sidebar width & default visibility (open on desktop >= 640px, closed drawer on small mobile)
+    if (window.innerWidth < 640) {
+      toggleAiSidebar(false);
+    } else {
+      var initW = parseInt(localStorage.getItem('km_ai_sidebar_width') || '380', 10);
+      applyAiSidebarWidth(initW || 380);
+    }
+
+    // Wire up draggable split-pane resizer (#aiSidebarResizer)
+    var resizerEl = KM.$('aiSidebarResizer');
+    if (resizerEl) {
+      var isDraggingSplit = false;
+      var onPointerMove = function (clientX) {
+        if (!isDraggingSplit) return;
+        var newAiWidth = window.innerWidth - clientX;
+        applyAiSidebarWidth(newAiWidth);
+
+      };
+
+      resizerEl.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        isDraggingSplit = true;
+        resizerEl.classList.add('is-dragging');
+        document.body.classList.add('is-resizing-split');
+      });
+
+      document.addEventListener('mousemove', function (e) {
+        if (isDraggingSplit) onPointerMove(e.clientX);
+      });
+
+      document.addEventListener('mouseup', function () {
+        if (!isDraggingSplit) return;
+        isDraggingSplit = false;
+        resizerEl.classList.remove('is-dragging');
+        document.body.classList.remove('is-resizing-split');
+      });
+
+      resizerEl.addEventListener('touchstart', function (e) {
+        isDraggingSplit = true;
+        resizerEl.classList.add('is-dragging');
+        document.body.classList.add('is-resizing-split');
+      }, { passive: true });
+
+      document.addEventListener('touchmove', function (e) {
+        if (isDraggingSplit && e.touches && e.touches[0]) {
+          onPointerMove(e.touches[0].clientX);
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', function () {
+        if (!isDraggingSplit) return;
+        isDraggingSplit = false;
+        resizerEl.classList.remove('is-dragging');
+        document.body.classList.remove('is-resizing-split');
+      });
+    }
+
+    window.addEventListener('resize', function () {
+      var sb = KM.$('aiSidebar');
+      if (sb && !sb.classList.contains('hidden') && sb.style.display !== 'none') {
+        if (window.innerWidth >= 640) {
+          var curW = parseInt(sb.style.width, 10) || 380;
+          applyAiSidebarWidth(curW);
+        } else {
+          sb.style.width = '100%';
+          updateFloatingRailPosition();
+        }
+      }
+    });
 
     KM.on('clearChatBtn', 'click', function () {
       var box = KM.$('chatMessages');
