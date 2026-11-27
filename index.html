@@ -25,7 +25,7 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=19" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
@@ -233,7 +233,7 @@
       <div id="pdfPagesContainer" class="hidden w-full flex flex-col items-center pb-16"></div>
 
       <!-- FLOATING RIGHT ZOOM & PAGE RAIL (#floatingZoomRail) -->
-      <div id="floatingZoomRail" class="hidden fixed right-2 sm:right-4 lg:right-[395px] top-24 sm:top-1/2 sm:-translate-y-1/2 z-20 bg-[#18181d]/90 backdrop-blur-md border border-zinc-700/80 rounded-2xl p-1 sm:p-1.5 shadow-2xl flex flex-col items-center gap-0.5 sm:gap-1 text-xs transition-all">
+      <div id="floatingZoomRail" class="hidden fixed right-3 top-24 sm:top-1/2 sm:-translate-y-1/2 z-20 bg-[#18181d]/90 backdrop-blur-md border border-zinc-700/80 rounded-2xl p-1 sm:p-1.5 shadow-2xl flex flex-col items-center gap-0.5 sm:gap-1 text-xs transition-all">
         <button id="zoomInBtn" type="button" title="Zoom In" class="w-8 h-8 rounded-xl text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer">
           <i class="ph-bold ph-plus"></i>
         </button>
@@ -259,18 +259,27 @@
       </div>
     </main>
 
-    <!-- RIGHT AI LITERATURE ASSISTANT SIDEBAR (Overlay drawer on mobile, docked panel on desktop) -->
-    <aside id="aiSidebar" class="hidden sm:flex fixed inset-0 sm:static sm:inset-auto w-full sm:w-[375px] bg-[#18181d] border-l border-zinc-800 flex-col shrink-0 z-40 sm:z-20">
-      <div class="h-11 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
-        <div class="flex items-center gap-2">
-          <i class="ph-fill ph-sparkle text-indigo-400"></i>
-          <span class="text-xs font-bold text-zinc-100">AI Literature Assistant</span>
+    <!-- DRAGGABLE SPLIT RESIZER HANDLE (Desktop/Tablet >= 640px) -->
+    <div id="aiSidebarResizer" title="Drag left or right to adjust PDF vs AI width ratio" class="ai-pane-resizer hidden sm:block"></div>
+
+    <!-- RIGHT AI LITERATURE ASSISTANT SIDEBAR (Overlay drawer on mobile, resizable docked panel on desktop) -->
+    <aside id="aiSidebar" style="width: 380px;" class="flex fixed inset-0 sm:static sm:inset-auto max-w-full bg-[#18181d] border-l border-zinc-800 flex-col shrink-0 z-40 sm:z-20">
+      <div class="h-11 px-3 border-b border-zinc-800 flex items-center justify-between gap-1.5 shrink-0">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <i class="ph-fill ph-sparkle text-indigo-400 shrink-0"></i>
+          <span class="text-xs font-bold text-zinc-100 truncate">AI Assistant</span>
         </div>
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 shrink-0">
+          <!-- Quick Split Ratio Presets (PDF : AI) -->
+          <div class="hidden sm:flex items-center bg-[#121216] border border-zinc-800 rounded-lg p-0.5 text-[10px] font-semibold mr-1" title="Adjust PDF : AI Width Ratio">
+            <button type="button" data-split-ai="30" class="split-ratio-btn px-1.5 py-0.5 rounded text-zinc-400 hover:text-white transition cursor-pointer">70:30</button>
+            <button type="button" data-split-ai="50" class="split-ratio-btn px-1.5 py-0.5 rounded text-zinc-400 hover:text-white transition cursor-pointer">50:50</button>
+            <button type="button" data-split-ai="65" class="split-ratio-btn px-1.5 py-0.5 rounded text-zinc-400 hover:text-white transition cursor-pointer">35:65</button>
+          </div>
           <button id="clearChatBtn" type="button" title="Clear chat" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 text-xs cursor-pointer">
             <i class="ph ph-trash"></i>
           </button>
-          <button id="closeAiSidebarBtn" type="button" title="Close AI sidebar" onclick="window.toggleAiSidebar && window.toggleAiSidebar(false)" class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 text-xs cursor-pointer">
+          <button id="closeAiSidebarBtn" type="button" title="Close AI sidebar" onclick="window.toggleAiSidebar && window.toggleAiSidebar(false)" class="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-rose-500/20 text-xs cursor-pointer">
             <i class="ph-bold ph-x"></i>
           </button>
         </div>
@@ -547,7 +556,7 @@
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
-            <p class="text-[11px] text-zinc-400">KM-Reader Studio v17 — Local-First Research Workspace</p>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v19 — Local-First Research Workspace</p>
           </div>
         </div>
         <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
@@ -650,8 +659,8 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js?v=17"></script>
-  <script src="js/matrix-ai.js?v=17"></script>
+  <script src="js/pdf-engine.js?v=19"></script>
+  <script src="js/matrix-ai.js?v=19"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', function () {

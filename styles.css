@@ -247,3 +247,50 @@ html, body {
     border-bottom: none;
   }
 }
+
+
+/* ==================== DRAGGABLE SPLIT-PANE RESIZER (PDF <-> AI) ==================== */
+.ai-pane-resizer {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 0.15s ease;
+  position: relative;
+  z-index: 35;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.ai-pane-resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 36px;
+  border-radius: 9999px;
+  background-color: rgba(161, 161, 170, 0.35);
+  transition: background-color 0.15s ease, height 0.15s ease;
+}
+
+.ai-pane-resizer:hover,
+.ai-pane-resizer.is-dragging {
+  background-color: rgba(99, 102, 241, 0.22);
+}
+
+.ai-pane-resizer:hover::after,
+.ai-pane-resizer.is-dragging::after {
+  background-color: #818cf8;
+  height: 56px;
+}
+
+body.is-resizing-split {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.is-resizing-split iframe,
+body.is-resizing-split canvas {
+  pointer-events: none !important;
+}

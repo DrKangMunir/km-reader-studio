@@ -1,4 +1,4 @@
-const CACHE_NAME = 'km-reader-studio-v17';
+const CACHE_NAME = 'km-reader-studio-v19';
 const APP_ASSETS = [
   './',
   './index.html',

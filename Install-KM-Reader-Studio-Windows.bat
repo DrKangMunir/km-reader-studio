@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 title KM-Reader Studio - Desktop App Setup
 echo ==========================================================
-echo  Installing KM-Reader Studio v17 (Desktop Application)
+echo  Installing KM-Reader Studio v19 (Desktop Application)
 echo ==========================================================
 echo.
 
@@ -31,6 +31,7 @@ xcopy /y /q /i "%SRC_DIR%js\*.js" "%APP_DIR%\js\" >nul
 echo [2/4] Generating KM-Reader Studio icon...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Add-Type -AssemblyName System.Drawing; " ^
+  "$dir = $env:LOCALAPPDATA + '\KM-Reader-Studio'; " ^
   "$bmp = New-Object System.Drawing.Bitmap(64,64); " ^
   "$g = [System.Drawing.Graphics]::FromImage($bmp); " ^
   "$g.SmoothingMode = 'AntiAlias'; " ^
@@ -39,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$font = New-Object System.Drawing.Font('Arial', 20, [System.Drawing.FontStyle]::Bold); " ^
   "$g.DrawString('KM', $font, [System.Drawing.Brushes]::White, 6, 16); " ^
   "$icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon()); " ^
-  "$fs = [System.IO.File]::OpenWrite('%APP_DIR%\km-reader.ico'); " ^
+  "$fs = [System.IO.File]::OpenWrite((Join-Path $dir 'km-reader.ico')); " ^
   "$icon.Save($fs); $fs.Close(); $g.Dispose(); $bmp.Dispose();"
 
 echo [3/4] Detecting browser runtime and creating shortcuts...
@@ -49,22 +50,21 @@ if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "BROWSER_EXE
 if not defined BROWSER_EXE if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "BROWSER_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not defined BROWSER_EXE if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "BROWSER_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 
-set "APP_URL=file:///%APP_DIR:\=/%/index.html"
-
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell; " ^
-  "$dir = '%APP_DIR%'; " ^
+  "$dir = Join-Path $env:LOCALAPPDATA 'KM-Reader-Studio'; " ^
+  "$htmlPath = Join-Path $dir 'index.html'; " ^
+  "$uri = ([System.Uri]$htmlPath).AbsoluteUri; " ^
   "$ico = Join-Path $dir 'km-reader.ico'; " ^
-  "$browser = '%BROWSER_EXE%'; " ^
-  "$url = '%APP_URL%'; " ^
+  "$browser = $env:BROWSER_EXE; " ^
   "$targets = @((Join-Path ([Environment]::GetFolderPath('Desktop')) 'KM-Reader Studio.lnk'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\KM-Reader Studio.lnk')); " ^
   "foreach ($lnk in $targets) { " ^
   "  $s = $ws.CreateShortcut($lnk); " ^
   "  if ($browser -and (Test-Path -LiteralPath $browser)) { " ^
   "    $s.TargetPath = $browser; " ^
-  "    $s.Arguments = '--app="' + $url + '"'; " ^
+  "    $s.Arguments = '--app=' + $uri; " ^
   "  } else { " ^
-  "    $s.TargetPath = Join-Path $dir 'index.html'; " ^
+  "    $s.TargetPath = $htmlPath; " ^
   "  } " ^
   "  $s.WorkingDirectory = $dir; " ^
   "  if (Test-Path -LiteralPath $ico) { $s.IconLocation = $ico + ',0'; } " ^
@@ -72,15 +72,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "}"
 
 echo [4/4] Launching KM-Reader Studio...
-if defined BROWSER_EXE (
-    start "" "%BROWSER_EXE%" --app="%APP_URL%"
-) else (
-    start "" "%APP_DIR%\index.html"
-)
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$dir = Join-Path $env:LOCALAPPDATA 'KM-Reader-Studio'; " ^
+  "$htmlPath = Join-Path $dir 'index.html'; " ^
+  "$uri = ([System.Uri]$htmlPath).AbsoluteUri; " ^
+  "$browser = $env:BROWSER_EXE; " ^
+  "if ($browser -and (Test-Path -LiteralPath $browser)) { " ^
+  "  Start-Process -FilePath $browser -ArgumentList ('--app=' + $uri); " ^
+  "} else { " ^
+  "  Start-Process -FilePath $htmlPath; " ^
+  "}"
 
 echo.
 echo ==========================================================
-echo  Installation complete! Shortcuts created on Desktop.
+echo  Installation complete! Shortcuts updated on Desktop.
 echo ==========================================================
 timeout /t 2 >nul
 exit /b 0
