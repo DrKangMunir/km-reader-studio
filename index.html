@@ -20,16 +20,16 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=12" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
   <!-- ==================== TOP BROWSER CHROME BAR (#111114) ==================== -->
-  <header class="h-11 bg-[#111114] border-b border-zinc-800/90 px-3 flex items-center justify-between gap-2 shrink-0 z-30">
+  <header class="h-11 bg-[#111114] border-b border-zinc-800/90 px-2 sm:px-3 flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 z-30 overflow-hidden">
     <!-- Left: Brand Emblem + Open PDF Tabs + Open PDF Button -->
-    <div class="flex items-center gap-2 min-w-0 flex-1">
-      <div class="flex items-center gap-2 pr-2.5 border-r border-zinc-800 shrink-0">
-        <svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="rounded-lg shadow-md shrink-0">
+    <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
+      <div class="flex items-center gap-2 pr-1.5 sm:pr-2.5 border-r border-zinc-800 shrink-0">
+        <svg width="26" height="26" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="rounded-lg shadow-md shrink-0">
           <defs>
             <linearGradient id="kmGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stop-color="#dc2626" />
@@ -45,29 +45,29 @@
         <span class="font-bold text-xs tracking-tight text-zinc-100 hidden sm:inline">KM-Reader <span class="text-indigo-400 font-semibold">Studio</span></span>
       </div>
 
-      <!-- Open PDF Tabs Bar -->
-      <div id="tabBar" class="flex items-center gap-1 overflow-x-auto min-w-0 py-1"></div>
-
-      <button id="openPdfTopBtn" type="button" onclick="window.triggerOpenPdf && window.triggerOpenPdf()" class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700/80 transition cursor-pointer">
+      <button id="openPdfTopBtn" type="button" onclick="window.triggerOpenPdf && window.triggerOpenPdf()" class="shrink-0 inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700/80 transition cursor-pointer">
         <i class="ph-bold ph-plus text-indigo-400"></i>
-        <span>Open PDF</span>
+        <span class="sm:hidden">Open</span><span class="hidden sm:inline">Open PDF</span>
       </button>
       <input id="pdfFileInput" type="file" accept="application/pdf" multiple class="hidden" />
+
+      <!-- Open PDF Tabs Bar -->
+      <div id="tabBar" class="flex items-center gap-1 overflow-x-auto min-w-0 flex-1 py-1"></div>
     </div>
 
     <!-- Right: Privacy/About, Gemini Status Pill & Ask AI Assistant Toggle -->
-    <div class="flex items-center gap-2 shrink-0">
-      <button id="openPrivacyModalBtn" type="button" title="About &amp; Local Privacy Policy" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button id="openPrivacyModalBtn" type="button" title="About &amp; Local Privacy Policy" class="hidden sm:inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
         <i class="ph-bold ph-shield-check text-emerald-400"></i>
         <span class="hidden md:inline">Privacy &amp; About</span>
       </button>
 
-      <button id="openApiSettingsBtn" type="button" onclick="window.openApiSettingsModal && window.openApiSettingsModal()" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
-        <span id="apiStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
-        <span id="activeModelBadge" class="max-w-[145px] truncate">Gemini 3.5 Flash-Lite</span>
+      <button id="openApiSettingsBtn" type="button" onclick="window.openApiSettingsModal && window.openApiSettingsModal()" class="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
+        <span id="apiStatusDot" class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+        <span id="activeModelBadge" class="max-w-[78px] sm:max-w-[145px] truncate">Gemini 3.5 Flash-Lite</span>
       </button>
 
-      <button id="toggleAiSidebarBtn" type="button" onclick="window.toggleAiSidebar && window.toggleAiSidebar()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-rose-600 via-indigo-600 to-violet-600 hover:brightness-110 text-white text-xs font-semibold shadow transition cursor-pointer">
+      <button id="toggleAiSidebarBtn" type="button" onclick="window.toggleAiSidebar && window.toggleAiSidebar()" class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-gradient-to-r from-rose-600 via-indigo-600 to-violet-600 hover:brightness-110 text-white text-xs font-semibold shadow transition cursor-pointer">
         <i class="ph-fill ph-sparkle text-amber-300"></i>
         <span class="sm:hidden">Ask AI</span><span class="hidden sm:inline">Ask AI Assistant</span>
       </button>
@@ -554,7 +554,7 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js"></script>
-  <script src="js/matrix-ai.js"></script>
+  <script src="js/pdf-engine.js?v=12"></script>
+  <script src="js/matrix-ai.js?v=12"></script>
 </body>
 </html>
