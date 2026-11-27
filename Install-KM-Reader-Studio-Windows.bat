@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 title KM-Reader Studio - Desktop App Setup
 echo ==========================================================
-echo  Installing KM-Reader Studio v20 (Desktop Application)
+echo  Installing KM-Reader Studio v22 (Desktop Application)
 echo ==========================================================
 echo.
 
