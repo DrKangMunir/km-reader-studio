@@ -213,3 +213,37 @@ html, body {
   color: #ffffff;
   transform: translateY(-1px);
 }
+
+
+/* ==================== MOBILE RESPONSIVE LITERATURE MATRIX CARDS (< 768px) ==================== */
+@media (max-width: 767px) {
+  .km-matrix-table,
+  .km-matrix-table tbody,
+  .km-matrix-table tr,
+  .km-matrix-table td {
+    display: block;
+    width: 100% !important;
+  }
+
+  .km-matrix-table thead {
+    display: none;
+  }
+
+  .km-matrix-table tr {
+    background-color: #141418;
+    border: 1px solid rgba(63, 63, 70, 0.85);
+    border-radius: 14px;
+    margin-bottom: 14px;
+    padding: 4px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  .km-matrix-table td {
+    padding: 10px 12px !important;
+    border-bottom: 1px solid rgba(39, 39, 42, 0.8);
+  }
+
+  .km-matrix-table td:last-child {
+    border-bottom: none;
+  }
+}
