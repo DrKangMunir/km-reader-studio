@@ -25,7 +25,7 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link rel="stylesheet" href="styles.css?v=17" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
@@ -62,6 +62,11 @@
 
     <!-- Right: Privacy/About, Gemini Status Pill & Ask AI Assistant Toggle -->
     <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button id="openGuideModalBtn" type="button" title="Quick Start Guide" class="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-amber-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
+        <i class="ph-bold ph-question"></i>
+        <span class="hidden md:inline">Guide</span>
+      </button>
+
       <button id="openPrivacyModalBtn" type="button" title="About &amp; Local Privacy Policy" class="hidden sm:inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
         <i class="ph-bold ph-shield-check text-emerald-400"></i>
         <span class="hidden md:inline">Privacy &amp; About</span>
@@ -171,33 +176,57 @@
     <main id="pdfViewportContainer" class="flex-1 relative bg-[#121216] overflow-y-auto overflow-x-auto p-2.5 sm:p-6 flex flex-col items-center">
 
       <!-- EMPTY STATE WELCOME CARD (#emptyStateCard) -->
-      <div id="emptyStateCard" class="my-auto max-w-lg w-full bg-[#18181d] border border-zinc-800 rounded-3xl p-8 text-center shadow-2xl">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-rose-600 via-pink-600 to-indigo-700 flex items-center justify-center shadow-lg">
-          <span class="text-white font-extrabold text-2xl tracking-tight">KM</span>
+      <div id="emptyStateCard" class="my-auto max-w-xl w-full bg-[#18181d] border border-zinc-800 rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
+        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-rose-600 via-pink-600 to-indigo-700 flex items-center justify-center shadow-lg">
+          <span class="text-white font-extrabold text-xl tracking-tight">KM</span>
         </div>
-        <h1 class="text-xl font-bold text-white mb-2">KM-Reader Studio</h1>
+        <h1 class="text-lg sm:text-xl font-bold text-white mb-1.5">Welcome to KM-Reader Studio</h1>
         <p class="text-xs text-zinc-400 leading-relaxed mb-5">
-          Open your academic research PDFs and click <strong class="text-indigo-300">1-Click Auto Matrix</strong> to extract Objectives, Methodology, Findings, Limitations &amp; Citations with 100% synchronized <span class="text-indigo-400 font-bold">[1]–[10]</span> in-text highlights.
+          AI-powered academic PDF reader &amp; <strong class="text-indigo-300">Literature Review Matrix</strong> generator. Start in 3 quick steps:
         </p>
 
-        <div class="flex flex-wrap items-center justify-center gap-1.5 mb-6 text-[11px] font-semibold">
-          <span class="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">Objective</span>
-          <span class="px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">Methodology</span>
-          <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Findings</span>
-          <span class="px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">Limitations</span>
-          <span class="px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">Citation</span>
+        <!-- API-First 3-Step Visual Walkthrough -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-left mb-6">
+          <div id="welcomeStep1Card" class="p-3 rounded-2xl bg-[#121216] border border-amber-500/40 relative">
+            <div class="flex items-center gap-1.5 text-xs font-bold text-amber-300 mb-1">
+              <span class="w-5 h-5 rounded-full bg-amber-500 text-zinc-950 text-[11px] font-extrabold flex items-center justify-center shrink-0">1</span>
+              <span>Free AI Key</span>
+            </div>
+            <p class="text-[11px] text-zinc-300 leading-snug">Click <strong class="text-amber-300">Setup Free API Key</strong> below to connect your free Google AI Studio key.</p>
+          </div>
+          <div class="p-3 rounded-2xl bg-[#121216] border border-zinc-800/90">
+            <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-300 mb-1">
+              <span class="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] flex items-center justify-center shrink-0">2</span>
+              <span>Open PDF</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 leading-snug">Upload your research PDFs or click <strong class="text-zinc-200">Try Sample Paper</strong> to test immediately.</p>
+          </div>
+          <div class="p-3 rounded-2xl bg-[#121216] border border-zinc-800/90">
+            <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-300 mb-1">
+              <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] flex items-center justify-center shrink-0">3</span>
+              <span>Auto Matrix</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 leading-snug">Click <strong class="text-indigo-300">1-Click Auto Matrix</strong> to extract tables, <strong class="text-indigo-300">[1]–[10]</strong> jump-links &amp; BibTeX.</p>
+          </div>
         </div>
 
         <div class="flex flex-col sm:flex-row items-center justify-center gap-2.5">
-          <button id="emptyOpenPdfBtn" type="button" onclick="window.triggerOpenPdf && window.triggerOpenPdf()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow transition cursor-pointer">
-            <i class="ph-bold ph-file-pdf"></i>
-            <span>Open Academic PDF</span>
+          <button id="welcomeSetupApiBtn" type="button" onclick="window.openApiSettingsModal && window.openApiSettingsModal()" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-key"></i>
+            <span id="welcomeApiBtnLabel">Step 1: Setup Free API Key</span>
           </button>
-          <button id="loadSamplePaperBtn" type="button" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer">
-            <i class="ph-fill ph-sparkle"></i>
-            <span>Try Sample Paper</span>
+          <button id="emptyOpenPdfBtn" type="button" onclick="window.triggerOpenPdf && window.triggerOpenPdf()" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-file-pdf"></i>
+            <span>Step 2: Open PDF</span>
+          </button>
+          <button id="loadSamplePaperBtn" type="button" class="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer">
+            <i class="ph-fill ph-sparkle text-amber-300"></i>
+            <span>Sample Paper</span>
           </button>
         </div>
+        <p class="text-[11px] text-zinc-500 mt-3.5">
+          100% private: your API key &amp; PDFs stay strictly inside your own browser storage.
+        </p>
       </div>
 
       <!-- MULTI-PAGE PDF RENDERER (#pdfPagesContainer) -->
@@ -460,6 +489,54 @@
     </div>
   </div>
 
+  <!-- ==================== QUICK START GUIDE MODAL (#quickGuideModal) ==================== -->
+  <div id="quickGuideModal" class="fixed inset-0 z-[96] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-lg rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-5 py-4 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center">
+            <i class="ph-bold ph-compass"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">How to Start — KM-Reader Studio</h3>
+            <p class="text-[11px] text-zinc-400">Set up your free AI engine first, then extract your Literature Matrix</p>
+          </div>
+        </div>
+        <button id="closeGuideModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 text-xs text-zinc-300 leading-relaxed">
+        <div class="p-3 rounded-xl bg-[#121216] border border-amber-500/40">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="font-bold text-amber-300">Step 1 — Get &amp; Paste Your Free Gemini API Key</span>
+            <button type="button" onclick="document.getElementById('quickGuideModal').classList.add('hidden'); window.openApiSettingsModal && window.openApiSettingsModal();" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-bold cursor-pointer">
+              Setup Key Now
+            </button>
+          </div>
+          <p class="text-[11px] text-zinc-400">Click <strong class="text-zinc-200">Gemini 3.5</strong> in the top bar → click <strong class="text-indigo-300">Get Free API Key ↗</strong> on Google AI Studio → paste your key and click <strong class="text-zinc-200">Save Settings</strong>. (Stored locally in your browser only.)</p>
+        </div>
+        <div class="p-3 rounded-xl bg-[#121216] border border-zinc-800">
+          <div class="font-bold text-indigo-300 mb-1">Step 2 — Open Your Academic PDFs</div>
+          <p class="text-[11px] text-zinc-400">Click <strong class="text-zinc-200">+ Open</strong> in the top bar to load one or multiple research PDFs, or try the built-in <strong class="text-zinc-200">Sample Paper</strong>.</p>
+        </div>
+        <div class="p-3 rounded-xl bg-[#121216] border border-zinc-800">
+          <div class="font-bold text-emerald-300 mb-1">Step 3 — Click "1-Click Auto Matrix" &amp; Verify [1]–[10]</div>
+          <p class="text-[11px] text-zinc-400">Press <strong class="text-indigo-300">Auto Matrix</strong> on the second toolbar to generate your 5-pillar synthesis table. Click any <span class="px-1.5 py-0.5 rounded bg-indigo-500/25 text-indigo-300 font-bold text-[10px]">[1]</span> badge to jump straight to the highlighted sentence in the PDF.</p>
+        </div>
+        <div class="p-3 rounded-xl bg-[#121216] border border-zinc-800">
+          <div class="font-bold text-purple-300 mb-1">Step 4 — Export to BibTeX, CSV, or Landscape PDF</div>
+          <p class="text-[11px] text-zinc-400">Send citations straight to Zotero/Mendeley (<strong class="text-zinc-200">BibTeX</strong>), Excel (<strong class="text-zinc-200">CSV</strong>), or a printable <strong class="text-zinc-200">PDF</strong>.</p>
+        </div>
+        <div class="pt-1 flex justify-end">
+          <button id="gotItGuideBtn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow cursor-pointer">
+            Got It!
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== ABOUT & LOCAL PRIVACY MODAL (#aboutPrivacyModal) ==================== -->
   <div id="aboutPrivacyModal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
     <div class="w-full max-w-md rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
@@ -470,7 +547,7 @@
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
-            <p class="text-[11px] text-zinc-400">KM-Reader Studio v15 — Local-First Research Workspace</p>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v17 — Local-First Research Workspace</p>
           </div>
         </div>
         <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
@@ -573,8 +650,8 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js?v=15"></script>
-  <script src="js/matrix-ai.js?v=15"></script>
+  <script src="js/pdf-engine.js?v=17"></script>
+  <script src="js/matrix-ai.js?v=17"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', function () {

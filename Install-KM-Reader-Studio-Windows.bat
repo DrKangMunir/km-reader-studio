@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 title KM-Reader Studio - Desktop App Setup
 echo ==========================================================
-echo  Installing KM-Reader Studio v15 (Desktop Application)
+echo  Installing KM-Reader Studio v17 (Desktop Application)
 echo ==========================================================
 echo.
 
@@ -24,6 +24,8 @@ if not exist "%APP_DIR%\js" mkdir "%APP_DIR%\js"
 echo [1/4] Copying latest application files...
 copy /y "%SRC_DIR%index.html" "%APP_DIR%\index.html" >nul
 if exist "%SRC_DIR%styles.css" copy /y "%SRC_DIR%styles.css" "%APP_DIR%\styles.css" >nul
+if exist "%SRC_DIR%manifest.json" copy /y "%SRC_DIR%manifest.json" "%APP_DIR%\manifest.json" >nul
+if exist "%SRC_DIR%sw.js" copy /y "%SRC_DIR%sw.js" "%APP_DIR%\sw.js" >nul
 xcopy /y /q /i "%SRC_DIR%js\*.js" "%APP_DIR%\js\" >nul
 
 echo [2/4] Generating KM-Reader Studio icon...

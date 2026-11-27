@@ -1,12 +1,12 @@
-const CACHE_NAME = 'km-reader-studio-v15';
+const CACHE_NAME = 'km-reader-studio-v17';
 const APP_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=15',
+  './styles.css?v=17',
   './js/security-lock.js',
   './js/installers.js',
-  './js/pdf-engine.js?v=15',
-  './js/matrix-ai.js?v=15',
+  './js/pdf-engine.js?v=17',
+  './js/matrix-ai.js?v=17',
   './manifest.json'
 ];
 
