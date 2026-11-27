@@ -48,9 +48,10 @@
     var used = {};
 
     var fullSample = corpus.page1RawText || ids.slice(0, 35).map(function (k) { return reg[k].text; }).join(' ');
-    var doiMatch = fullSample.match(/(?:https?:\/\/doi\.org\/|doi:\s*)(10\.\d{4,9}\/[^\s,;)]+)/i);
+    var doiMatch = fullSample.match(/(?:https?:\/\/dx\.doi\.org\/|https?:\/\/doi\.org\/|doi:\s*)(10\.\d{4,9}\/[^\s,;)]+)/i);
     var doi = doiMatch ? doiMatch[1].replace(/\.+$/, '') : '';
-    var journalMatch = fullSample.match(/\b([A-Z][A-Za-z\s&.]+\.\s*20\d{2}[;,\s]+\d+\([^)]+\):\s*\d+[–-]\d+)\b/) ||
+    var journalMatch = fullSample.match(/\(([A-Z][A-Za-z\s&.]+20\d{2};\s*\d+(?:\(\d+\))?:\s*\d+[–-]\d+)\.?\)/) ||
+      fullSample.match(/\b([A-Z][A-Za-z\s&.]+\.\s*20\d{2}[;,\s]+\d+\([^)]+\):\s*\d+[–-]\d+)\b/) ||
       fullSample.match(/\b(EMHJ\s*[–-]\s*Vol\.\s*\d+\s*No\.\s*\d+\s*[–-]\s*20\d{2})\b/i);
     var journal = journalMatch ? journalMatch[1].trim() : '';
 
@@ -181,9 +182,9 @@
 
   function getBalancedTranscript(fullTranscript) {
     if (!fullTranscript) return '';
-    if (fullTranscript.length <= 46000) return fullTranscript;
-    var head = fullTranscript.slice(0, 32000);
-    var tail = fullTranscript.slice(-14000);
+    if (fullTranscript.length <= 78000) return fullTranscript;
+    var head = fullTranscript.slice(0, 52000);
+    var tail = fullTranscript.slice(-26000);
     return head + '\n\n[... MIDDLE SECTION TRUNCATED FOR LENGTH ...]\n\n' + tail;
   }
 
@@ -214,39 +215,42 @@
       }
 
       var meta = KM.parsePaperMeta(paper, reg);
+      var deterministicBase = buildDeterministicMatrixFromCorpus(paper, corpus);
       var extracted = null;
 
       if (KM.state.apiKey) {
         try {
           var transcriptSlice = getBalancedTranscript(corpus.indexedTranscript);
+          var page1HeaderHint = (corpus.page1RawText || '').slice(0, 1800);
           var prompt = [
-            'You are an expert academic literature review synthesis engine.',
-            'Below is the complete paper indexed by exact Sentence IDs ([S001 | P.1], [S002 | P.1], etc.).',
-            'Extract a comprehensive, publication-grade 5-Pillar Literature Review Matrix.',
-            'For every claim, ground it with exact Sentence IDs from the transcript and embed sequential citation markers [1], [2], ... in order.',
-            'CRITICAL RULES:',
-            '- NEVER output placeholder text. Write REAL scholarly synthesis prose in your own academic words.',
-            '- Extract all 5 pillars & 10 sub-fields:',
-            '  1. context: Bibliographic metadata (authors, title, journal, doi) + settingPopulation (where the study took place, sample size, demographics/materials).',
-            '  2. purpose: problemObjective (research gap, question, hypotheses/objectives) + theoreticalFramework (guiding models/theories/concepts, or state "None explicitly stated" if atheoretical).',
-            '  3. methodology: studyDesign (e.g. Quantitative Cross-Sectional, RCT, Qualitative, Mixed-Methods) + dataAnalysis (instruments, surveys, interventions, statistical/coding methods).',
-            '  4. findings: mainResults (core outcomes, percentages, p-values, themes in your own words) + conclusions (authors interpretation & claimed implications).',
-            '  5. evaluation: strengthsLimitations (sample biases, weak controls, measurement issues, strengths, future work) + connectionRelevance (how it supports/contradicts/extends literature and suggested review outline section).',
+            'You are a strict, zero-hallucination academic literature review extraction engine.',
+            'Below is Page 1 header/footer text followed by the full paper indexed by exact Sentence IDs ([S001 | P.1], [S002 | P.1], etc.).',
+            'CRITICAL ZERO-HALLUCINATION & EXACT HIGHLIGHT RULES:',
+            '1. ZERO FABRICATION: Every single number, percentage, p-value, sample size, country name, construct, title word, journal citation, and DOI MUST come verbatim from the provided text. Never guess or alter a DOI or page range.',
+            '2. EXACT TITLE, JOURNAL & DOI: Copy the exact full article title, exact journal citation/pages, and exact DOI from Page 1.',
+            '3. SINGLE-SENTENCE INLINE GROUNDING: Place [Sxxx] immediately at the end of EACH individual sentence in your synthesis (for example: "Sentence A [S015]. Sentence B [S042]."). Every [Sxxx] MUST be the exact sentence in the PDF that contains the specific facts stated in that sentence.',
+            '4. NEVER bundle multiple unrelated facts under one [Sxxx] tag—split them into separate sentences so each [Sxxx] highlights the exact matching source sentence in the PDF.',
+            'Extract all 5 pillars & 10 sub-fields:',
+            '  1. context: Bibliographic metadata (authors, exact full title, exact journal, exact doi) + settingPopulation (countries/setting, exact sample size, demographics).',
+            '  2. purpose: problemObjective (research problem, objective/aim) + theoreticalFramework (guiding model/theory and each specific domain/construct measured, citing the exact Methods/Questionnaire sentence IDs).',
+            '  3. methodology: studyDesign (study design & interview/survey procedure) + dataAnalysis (statistical tests, software, regression models).',
+            '  4. findings: mainResults (exact percentages, sample counts, p-values, and predictors) + conclusions (authors main conclusions & recommendations).',
+            '  5. evaluation: strengthsLimitations (explicit study limitations & strengths) + connectionRelevance (how it contributes to the literature).',
             'Return strictly valid JSON (no markdown fences):',
             '{',
             '  "authors": "Lead Author et al. (Year)",',
-            '  "title": "Exact Paper Title",',
-            '  "journal": "Journal Name, Vol(Issue):Pages",',
-            '  "doi": "10.xxxx/xxxxx",',
+            '  "title": "Exact Full Paper Title From Page 1",',
+            '  "journal": "Exact Journal & Pages From Page 1",',
+            '  "doi": "Exact DOI From Page 1",',
             '  "columns": {',
-            '    "context": { "settingPopulation": "...", "evidenceIds": ["S012"] },',
-            '    "purpose": { "problemObjective": "...", "theoreticalFramework": "...", "evidenceIds": ["S004", "S022"] },',
-            '    "methodology": { "studyDesign": "...", "dataAnalysis": "...", "evidenceIds": ["S018", "S028"] },',
-            '    "findings": { "mainResults": "...", "conclusions": "...", "evidenceIds": ["S032", "S036", "S085"] },',
-            '    "evaluation": { "strengthsLimitations": "...", "connectionRelevance": "...", "evidenceIds": ["S080", "S065"] }',
+            '    "context": { "settingPopulation": "Sentence 1 [S012]. Sentence 2 [S019].", "evidenceIds": ["S012", "S019"] },',
+            '    "purpose": { "problemObjective": "... [S004].", "theoreticalFramework": "... [S038]. ... [S039].", "evidenceIds": ["S004", "S038", "S039"] },',
+            '    "methodology": { "studyDesign": "... [S018].", "dataAnalysis": "... [S052].", "evidenceIds": ["S018", "S052"] },',
+            '    "findings": { "mainResults": "... [S060]. ... [S064].", "conclusions": "... [S095].", "evidenceIds": ["S060", "S064", "S095"] },',
+            '    "evaluation": { "strengthsLimitations": "... [S088]. ... [S090].", "connectionRelevance": "... [S097].", "evidenceIds": ["S088", "S090", "S097"] }',
             '  }',
             '}',
-            'Transcript:\n' + transcriptSlice
+            'Page 1 Header/Footer Metadata:\n' + page1HeaderHint + '\n\nIndexed Full-Text Transcript:\n' + transcriptSlice
           ].join('\n');
 
           var raw = await callGeminiAPI(prompt);
@@ -281,21 +285,58 @@
 
       var badgeSeq = 1;
       var linkedCount = 0;
-      var sIdToBadgeMap = {};
 
-      function normalizeBadgeRefs(str) {
-        return String(str || '').replace(/\[([S\d\s|,P.]+?)\]/g, function (fullMatch, inner) {
-          if (/^\d{1,2}$/.test(inner.trim())) return fullMatch;
-          var sMatches = inner.match(/S\d{3}/gi);
-          if (sMatches && sMatches.length) {
-            return sMatches.map(function (sTag) {
-              var sKey = sTag.toUpperCase();
-              var b = sIdToBadgeMap[sKey];
-              return b ? ('[' + b + ']') : ('[' + sKey + ']');
-            }).join(' ');
+      var stopWords = {
+        the:1, and:1, for:1, that:1, with:1, were:1, was:1, are:1, from:1, this:1,
+        study:1, used:1, using:1, based:1, across:1, into:1, between:1, among:1,
+        their:1, they:1, have:1, has:1, had:1, which:1, also:1, such:1, than:1,
+        more:1, most:1, other:1, each:1, both:1, all:1, any:1, can:1, may:1
+      };
+
+      function extractContentKeywords(text) {
+        var words = String(text || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/);
+        var out = [];
+        words.forEach(function (w) {
+          if (w.length >= 4 && !stopWords[w] && out.indexOf(w) === -1) {
+            out.push(w);
           }
-          return fullMatch;
         });
+        return out;
+      }
+
+      function scoreSentenceMatch(claimText, sentText) {
+        var kws = extractContentKeywords(claimText);
+        if (!kws.length) return 0;
+        var lowSent = String(sentText || '').toLowerCase();
+        var hits = 0;
+        kws.forEach(function (kw) {
+          if (lowSent.indexOf(kw) !== -1) hits++;
+        });
+        return hits / kws.length;
+      }
+
+      function findBestSentenceForClaim(claimText, candidateSId) {
+        var cleanClaim = String(claimText || '').replace(/\[[^\]]+\]/g, '').trim();
+        var bestId = (candidateSId && reg[candidateSId]) ? candidateSId : null;
+        var currentScore = bestId ? scoreSentenceMatch(cleanClaim, reg[bestId].text) : 0;
+
+        // If the AI's cited sentence already shares >= 35% of the claim's key terms, trust it directly
+        if (bestId && currentScore >= 0.35) {
+          return bestId;
+        }
+
+        // Otherwise search all indexed sentences in the PDF for the true highest-overlap source sentence
+        var topScore = currentScore;
+        validIds.forEach(function (id) {
+          var sTxt = reg[id].text;
+          if (/^\d+\.\s+[A-Z]/.test(sTxt)) return; // skip bibliography lines
+          var sc = scoreSentenceMatch(cleanClaim, sTxt);
+          if (sc > topScore + 0.08) {
+            topScore = sc;
+            bestId = id;
+          }
+        });
+        return bestId;
       }
 
       var fallbackRef = buildDeterministicMatrixFromCorpus(paper, corpus);
@@ -306,47 +347,85 @@
           col = fallbackRef.columns[colKey] || {};
           extracted.columns[colKey] = col;
         }
-        var ids = Array.isArray(col.evidenceIds) ? col.evidenceIds.map(function (s) { return String(s).trim().toUpperCase(); }) : [];
+
+        var fallbackIds = Array.isArray(col.evidenceIds)
+          ? col.evidenceIds.map(function (s) { return String(s).trim().toUpperCase(); }).filter(function (id) { return Boolean(reg[id]); })
+          : [];
+        if (!fallbackIds.length && fallbackRef.columns[colKey]) {
+          fallbackIds = (fallbackRef.columns[colKey].evidenceIds || []).slice();
+        }
+        var fallbackCursor = 0;
+
+        // Process each text field in order of appearance so every [Sxxx] or [n] badge matches the exact clause right before it
         Object.keys(col).forEach(function (prop) {
-          if (typeof col[prop] === 'string') {
-            var mArr = col[prop].match(/S\d{3}/gi);
-            if (mArr) {
-              mArr.forEach(function (m) {
-                var mUpper = m.toUpperCase();
-                if (ids.indexOf(mUpper) === -1) ids.push(mUpper);
+          if (typeof col[prop] !== 'string') return;
+          var textVal = col[prop];
+
+          col[prop] = textVal.replace(/([^.!?;\n]*?)\[([S\d\s|,P.]+?)\]/gi, function (fullMatch, clauseBefore, inner) {
+            var sMatches = inner.match(/S\d{3}/gi);
+            var nMatches = inner.match(/\b\d{1,2}\b/g);
+            var tokens = [];
+
+            if (sMatches && sMatches.length) {
+              sMatches.forEach(function (sTag) {
+                var rawId = sTag.toUpperCase();
+                var verifiedId = findBestSentenceForClaim(clauseBefore, rawId);
+                if (verifiedId && reg[verifiedId]) {
+                  tokens.push(verifiedId);
+                }
+              });
+            } else if (nMatches && nMatches.length) {
+              nMatches.forEach(function () {
+                var cand = fallbackIds[fallbackCursor++] || null;
+                var verifiedId = findBestSentenceForClaim(clauseBefore, cand);
+                if (verifiedId && reg[verifiedId]) {
+                  tokens.push(verifiedId);
+                }
               });
             }
-          }
-        });
-        var validColIds = ids.filter(function (id) { return Boolean(reg[id]); });
 
-        if (!validColIds.length && fallbackRef.columns[colKey]) {
-          validColIds = fallbackRef.columns[colKey].evidenceIds || [];
-        }
+            if (!tokens.length) return fullMatch;
 
-        validColIds.forEach(function (sId) {
-          var entry = reg[sId];
-          if (!entry) return;
-          var badgeNum = badgeSeq++;
-          sIdToBadgeMap[sId.toUpperCase()] = badgeNum;
-          linkedCount++;
-          paper.highlights.push({
-            id: 'auto_' + paper.id + '_' + badgeNum + '_' + Date.now(),
-            pageNum: entry.pageNum,
-            category: catToStyle[colKey],
-            citationNum: badgeNum,
-            isAutoMatrix: true,
-            sentenceId: sId,
-            quote: entry.text,
-            rects: entry.rects
+            var renderedChips = tokens.map(function (sId) {
+              var entry = reg[sId];
+              var badgeNum = badgeSeq++;
+              linkedCount++;
+              paper.highlights.push({
+                id: 'auto_' + paper.id + '_' + badgeNum + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                pageNum: entry.pageNum,
+                category: catToStyle[colKey],
+                citationNum: badgeNum,
+                isAutoMatrix: true,
+                sentenceId: sId,
+                quote: entry.text,
+                rects: entry.rects
+              });
+              return '[' + badgeNum + ']';
+            });
+
+            return clauseBefore + renderedChips.join(' ');
           });
         });
 
-        Object.keys(col).forEach(function (prop) {
-          if (typeof col[prop] === 'string') {
-            col[prop] = normalizeBadgeRefs(col[prop]);
-          }
-        });
+        // If a column had no inline markers at all, anchor its fallback evidenceIds
+        if (!paper.highlights.some(function (h) { return h.isAutoMatrix && h.category === catToStyle[colKey]; }) && fallbackIds.length) {
+          fallbackIds.forEach(function (sId) {
+            var entry = reg[sId];
+            if (!entry) return;
+            var badgeNum = badgeSeq++;
+            linkedCount++;
+            paper.highlights.push({
+              id: 'auto_' + paper.id + '_' + badgeNum + '_' + Date.now(),
+              pageNum: entry.pageNum,
+              category: catToStyle[colKey],
+              citationNum: badgeNum,
+              isAutoMatrix: true,
+              sentenceId: sId,
+              quote: entry.text,
+              rects: entry.rects
+            });
+          });
+        }
       });
 
       for (var p = 1; p <= paper.numPages; p++) {
@@ -372,14 +451,17 @@
         }
       });
 
+      var verifiedDoi = deterministicBase.doi || extracted.doi || '';
+      var verifiedJournal = deterministicBase.journal || extracted.journal || '';
+
       paper.matrixRow = {
         paperId: paper.id,
         paperName: paper.title,
         fileName: paper.fileName || (paper.title + '.pdf'),
         authors: extracted.authors || meta.authors,
         title: extracted.title || meta.title,
-        journal: extracted.journal || fallbackRef.journal || '',
-        doi: extracted.doi || fallbackRef.doi || '',
+        journal: verifiedJournal,
+        doi: verifiedDoi,
         linkedCount: linkedCount,
         evidenceMap: evidenceMap,
         settingPopulation: cCtx.settingPopulation || fallbackRef.columns.context.settingPopulation || '',
@@ -1394,7 +1476,6 @@
 
         var page = pdfDoc.addPage([PAGE_W, PAGE_H]);
         var cursorY = drawPageBannerAndHeader(page, true);
-        var maxRowBodyH = PAGE_H - MARGIN_TOP - HEADER_H - MARGIN_BOTTOM - 10;
 
         for (var rIdx = 0; rIdx < rows.length; rIdx++) {
           var r = rows[rIdx];
@@ -1408,9 +1489,24 @@
             if (h > rowH) rowH = h;
           }
 
-          if (rowH > maxRowBodyH) rowH = maxRowBodyH;
-
-          if (cursorY - rowH < MARGIN_BOTTOM) {
+          // If a detailed study row is taller than standard A4 Landscape, expand that page's height dynamically so zero lines are clipped or overlapped
+          var minNeededPageH = rowH + MARGIN_TOP + HEADER_H + MARGIN_BOTTOM + 36;
+          if (minNeededPageH > PAGE_H) {
+            if (rIdx === 0) {
+              pdfDoc.removePage(0);
+              page = pdfDoc.addPage([PAGE_W, minNeededPageH]);
+              var origPageH = PAGE_H;
+              PAGE_H = minNeededPageH;
+              cursorY = drawPageBannerAndHeader(page, true);
+              PAGE_H = origPageH;
+            } else {
+              page = pdfDoc.addPage([PAGE_W, minNeededPageH]);
+              var origPageH2 = PAGE_H;
+              PAGE_H = minNeededPageH;
+              cursorY = drawPageBannerAndHeader(page, false);
+              PAGE_H = origPageH2;
+            }
+          } else if (cursorY - rowH < MARGIN_BOTTOM) {
             page = pdfDoc.addPage([PAGE_W, PAGE_H]);
             cursorY = drawPageBannerAndHeader(page, false);
           }

@@ -1,1 +1,1 @@
-(function () { 'use strict'; window.KM_APP_VERSION = '20.0'; })();
+(function () { 'use strict'; window.KM_APP_VERSION = '22.0'; })();

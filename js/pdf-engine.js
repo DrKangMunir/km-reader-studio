@@ -673,10 +673,10 @@
 
     return lines.map(function (ln) {
       return {
-        xPct: Math.max(0, ln.xPct - 0.002),
-        yPct: Math.max(0, ln.yPct - 0.001),
-        wPct: Math.min(1, ln.wPct + 0.004),
-        hPct: Math.min(1, ln.hPct + 0.002)
+        xPct: Math.max(0, ln.xPct - 0.003),
+        yPct: Math.max(0, ln.yPct - 0.002),
+        wPct: Math.min(1, ln.wPct + 0.006),
+        hPct: Math.min(1, ln.hPct + 0.004)
       };
     });
   }
@@ -782,7 +782,7 @@
         page1RawText = fullText;
       }
 
-      var abbrevRegex = /^(?:et al|fig|figs|table|vs|e\.g|i\.e|dr|mr|mrs|prof|no|vol|pp|st|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|[a-zA-Z])$/i;
+      var abbrevRegex = /^(?:et al|fig|figs|table|vs|e\.g|i\.e|eg|ie|dr|mr|mrs|prof|no|vol|pp|st|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|[a-zA-Z])$/i;
       var wordBeforeRegex = /[a-zA-Z]+$/;
       var urlRegex = /(?:https?:\/\/|doi\.org|\.org|\.gov|\.edu|\.com)/i;
 
