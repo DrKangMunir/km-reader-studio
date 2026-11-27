@@ -6,6 +6,11 @@
   <title>KM-Reader Studio — Academic Research &amp; Literature Review Workspace</title>
   
   <!-- Synchronous SVG Favicon with crimson-to-indigo KM emblem -->
+  <meta name="theme-color" content="#111114" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="KM-Reader" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='km' x1='0' y1='0' x2='64' y2='64' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%23dc2626'/%3E%3Cstop offset='52%25' stop-color='%23e11d48'/%3E%3Cstop offset='100%25' stop-color='%234338ca'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23km)'/%3E%3Ctext x='30' y='38' text-anchor='middle' fill='%23ffffff' font-family='sans-serif' font-weight='800' font-size='22'%3EKM%3C/text%3E%3Ccircle cx='49' cy='15' r='5' fill='%23fde047'/%3E%3C/svg%3E" />
   
   <!-- Typography & Icons -->
@@ -20,7 +25,7 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
@@ -465,7 +470,7 @@
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
-            <p class="text-[11px] text-zinc-400">KM-Reader Studio v14 — Local-First Research Workspace</p>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v15 — Local-First Research Workspace</p>
           </div>
         </div>
         <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
@@ -568,7 +573,14 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js?v=14"></script>
-  <script src="js/matrix-ai.js?v=14"></script>
+  <script src="js/pdf-engine.js?v=15"></script>
+  <script src="js/matrix-ai.js?v=15"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  </script>
 </body>
 </html>
