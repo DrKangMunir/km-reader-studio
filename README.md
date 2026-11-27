@@ -2,6 +2,10 @@
 
 An offline-first academic PDF reader and automated **Literature Review Synthesis Matrix** workspace built for researchers.
 
+## Download & Launch
+- **Download Desktop App (Windows):** [Get KM-Reader Studio v9 via Free Registration Form](https://tally.so/r/gbG56P)
+- **Launch Instant Web App:** [Open KM-Reader Studio Online](https://drkangmunir.github.io/km-reader-studio/)
+
 ## Key Features
 - **1-Click Auto Matrix:** Extracts a 5-pillar, 10-dimension literature synthesis (Context, Purpose & Framework, Methodology, Key Findings, and Critical Evaluation) with clickable `[1]–[10]` sentence jump-links anchored directly to the PDF.
 - **Persistent Literature Matrix:** Stores extracted studies across sessions, supports merging saved `.json` / `.csv` matrices, and exports clean **CSV** and **A4 Landscape PDF** tables.
