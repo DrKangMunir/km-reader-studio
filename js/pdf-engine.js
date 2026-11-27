@@ -386,6 +386,11 @@
 
     KM.state.papers.push(paper);
     KM.state.activePaperId = paper.id;
+    if (window.innerWidth < 768) {
+      var vp = KM.$('pdfViewportContainer');
+      var availW = Math.max(280, (vp ? vp.clientWidth : window.innerWidth) - 24);
+      KM.state.scale = Number(Math.min(1.25, Math.max(0.52, availW / 612)).toFixed(2));
+    }
     renderTabs();
     await renderActivePdfPages();
     KM.saveWorkspaceToDb();

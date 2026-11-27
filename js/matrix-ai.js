@@ -547,7 +547,7 @@
       return;
     }
 
-    var html = '<table class="w-full text-left border-collapse text-xs leading-relaxed">' +
+    var html = '<table class="km-matrix-table w-full text-left border-collapse text-xs leading-relaxed">' +
       '<thead><tr class="border-b border-zinc-800 bg-[#121216] text-[11px] font-bold sticky top-0 z-10">' +
       '<th class="py-3.5 px-3.5 text-zinc-200 w-[20%]">1. Citation &amp; Context</th>' +
       '<th class="py-3.5 px-3.5 text-amber-400 w-[20%]">2. Purpose &amp; Framework</th>' +
@@ -1411,6 +1411,9 @@
       var chatCiteBtn = e.target.closest('[data-chat-cite]');
       if (chatCiteBtn) {
         var chatNum = String(chatCiteBtn.dataset.chatCite || '').trim();
+        if (window.innerWidth < 640) {
+          toggleAiSidebar(false);
+        }
         if (KM.jumpToCitation) KM.jumpToCitation(chatNum, KM.state.activePaperId);
         return;
       }
