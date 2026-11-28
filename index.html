@@ -25,7 +25,7 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   
   <!-- Custom Dark Slate & Optical Layer Styles -->
-  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="styles.css?v=33" />
 </head>
 <body class="flex flex-col h-[100dvh] w-screen bg-[#111114] text-zinc-100 select-none overflow-hidden">
 
@@ -60,8 +60,14 @@
       <div id="tabBar" class="flex items-center gap-1 overflow-x-auto min-w-0 flex-1 py-1"></div>
     </div>
 
-    <!-- Right: Privacy/About, Gemini Status Pill & Ask AI Assistant Toggle -->
+    <!-- Right: Update Pill, Privacy/About, Gemini Status Pill & Ask AI Assistant Toggle -->
     <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button id="checkUpdateBtn" type="button" title="Check for App Updates (v33.0)" class="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-sky-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer relative">
+        <i class="ph-bold ph-arrows-clockwise"></i>
+        <span id="updateBtnLabel" class="hidden md:inline">Update</span>
+        <span id="updateAvailableDot" class="hidden w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#111114] absolute -top-0.5 -right-0.5"></span>
+      </button>
+
       <button id="openGuideModalBtn" type="button" title="Quick Start Guide" class="inline-flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#18181d] hover:bg-zinc-800 text-amber-300 border border-zinc-700/80 text-xs font-medium transition cursor-pointer">
         <i class="ph-bold ph-question"></i>
         <span class="hidden md:inline">Guide</span>
@@ -167,7 +173,7 @@
 
       <div class="w-px h-5 md:w-5 md:h-px bg-zinc-700/80 mx-0.5 md:mx-0 md:my-0.5"></div>
 
-      <button id="clearPageHighlightsBtn" type="button" title="Clear Current Page Highlights" class="w-9 h-9 rounded-xl text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 flex items-center justify-center transition cursor-pointer">
+      <button id="toolEraseBtn" type="button" data-tool="erase" title="Eraser Tool — Click any highlight on the PDF to delete just that highlight & remove it from Matrix" class="dock-tool-btn w-9 h-9 rounded-xl text-zinc-300 hover:text-rose-400 hover:bg-zinc-800 flex items-center justify-center transition cursor-pointer">
         <i class="ph-bold ph-eraser text-base"></i>
       </button>
     </aside>
@@ -225,7 +231,7 @@
           </button>
         </div>
         <p class="text-[11px] text-zinc-500 mt-3.5">
-          100% private: your API key &amp; PDFs stay strictly inside your own browser storage.
+          Your API key &amp; PDFs are stored only in your own browser. With a key set, the AI features send the paper's text to Google Gemini.
         </p>
       </div>
 
@@ -555,7 +561,7 @@
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">About &amp; Data Privacy</h3>
-            <p class="text-[11px] text-zinc-400">KM-Reader Studio v24 — Local-First Research Workspace</p>
+            <p class="text-[11px] text-zinc-400">KM-Reader Studio v33 — Local-First Research Workspace</p>
           </div>
         </div>
         <button id="closePrivacyModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
@@ -565,7 +571,7 @@
       <div class="p-5 space-y-3 text-xs text-zinc-300 leading-relaxed">
         <div class="p-3 rounded-xl bg-[#121216] border border-zinc-800 space-y-1.5">
           <div class="font-bold text-emerald-300 flex items-center gap-1.5">
-            <i class="ph-fill ph-lock-key"></i> 100% Local File Processing
+            <i class="ph-fill ph-lock-key"></i> Local File Storage
           </div>
           <p class="text-[11px] text-zinc-400">
             All PDFs, highlights, sticky notes, and Literature Matrix tables are processed and stored locally inside your browser/desktop storage (<code class="text-zinc-300">IndexedDB</code> &amp; <code class="text-zinc-300">localStorage</code>). Your manuscripts are never uploaded to any third-party cloud server.
@@ -649,6 +655,64 @@
     </div>
   </div>
 
+  <!-- ==================== IN-APP AUTO-UPDATE MODAL (#appUpdateModal) ==================== -->
+  <div id="appUpdateModal" class="fixed inset-0 z-[98] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md rounded-2xl bg-[#18181d] border border-zinc-700/90 shadow-2xl overflow-hidden text-zinc-100">
+      <div class="px-5 py-4 border-b border-zinc-800 bg-[#121216] flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 flex items-center justify-center">
+            <i class="ph-bold ph-arrows-clockwise"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">KM-Reader Studio — App Updates</h3>
+            <p id="updateVersionSubtitle" class="text-[11px] text-zinc-400">Installed Version: v33.0</p>
+          </div>
+        </div>
+        <button id="closeUpdateModalBtn" type="button" class="w-8 h-8 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 text-xs text-zinc-300 leading-relaxed">
+        <div id="updateStatusCard" class="p-3 rounded-xl bg-[#121216] border border-zinc-800 space-y-1">
+          <div id="updateStatusTitle" class="font-bold text-zinc-100">Checking GitHub for updates...</div>
+          <p id="updateStatusDesc" class="text-[11px] text-zinc-400">Connecting to DrKangMunir/km-reader-studio...</p>
+        </div>
+
+        <div id="desktopAutoUpdateBox" class="hidden p-3 rounded-xl bg-indigo-950/50 border border-indigo-500/40 space-y-2">
+          <div class="font-bold text-indigo-300 flex items-center gap-1.5">
+            <i class="ph-bold ph-desktop"></i> Automatic Desktop App Update
+          </div>
+          <p class="text-[11px] text-zinc-300">
+            Click <strong>Auto-Update Desktop App</strong> below to download the latest files directly into your <code class="text-zinc-200">KM-Reader-Studio</code> folder, or run <strong>Update KM-Reader Studio</strong> from your Windows Start Menu anytime.
+          </p>
+          <button id="runDesktopAutoUpdateBtn" type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-download-simple"></i>
+            <span>Auto-Update Desktop App Now</span>
+          </button>
+        </div>
+
+        <div id="webAutoUpdateBox" class="hidden p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
+          <div class="font-bold text-emerald-300 flex items-center gap-1.5">
+            <i class="ph-bold ph-globe"></i> Instant Web App Refresh
+          </div>
+          <button id="runWebReloadUpdateBtn" type="button" class="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow transition cursor-pointer">
+            <i class="ph-bold ph-arrows-clockwise"></i>
+            <span>Reload &amp; Apply Update Now</span>
+          </button>
+        </div>
+
+        <div class="pt-1 flex items-center justify-between gap-2">
+          <button id="recheckUpdateNowBtn" type="button" class="px-3 py-1.5 rounded-lg bg-[#222228] hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold cursor-pointer">
+            Check Again
+          </button>
+          <a href="https://github.com/DrKangMunir/km-reader-studio/releases" target="_blank" rel="noopener noreferrer" class="text-[11px] text-sky-400 hover:underline">
+            View GitHub Releases ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== TOAST NOTIFICATION BANNER ==================== -->
   <div id="toastBanner" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[120] px-4 py-2 rounded-full bg-[#18181d] border border-zinc-700 shadow-2xl flex items-center gap-2 text-xs text-zinc-100">
     <span id="toastDot" class="w-2 h-2 rounded-full bg-indigo-400"></span>
@@ -658,8 +722,8 @@
   <!-- Modular Scripts -->
   <script src="js/security-lock.js"></script>
   <script src="js/installers.js"></script>
-  <script src="js/pdf-engine.js?v=24"></script>
-  <script src="js/matrix-ai.js?v=24"></script>
+  <script src="js/pdf-engine.js?v=33"></script>
+  <script src="js/matrix-ai.js?v=33"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', function () {

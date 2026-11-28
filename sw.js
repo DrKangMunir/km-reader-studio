@@ -1,12 +1,12 @@
-const CACHE_NAME = 'km-reader-studio-v24';
+const CACHE_NAME = 'km-reader-studio-v33';
 const APP_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=24',
+  './styles.css?v=33',
   './js/security-lock.js',
   './js/installers.js',
-  './js/pdf-engine.js?v=24',
-  './js/matrix-ai.js?v=24',
+  './js/pdf-engine.js?v=33',
+  './js/matrix-ai.js?v=33',
   './manifest.json'
 ];
 
@@ -35,7 +35,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.hostname.includes('generativelanguage.googleapis.com')) return;
 
-  // v24: network first, so an updated app is used at once; the cache is only the offline fallback
+  // v33: network first, so an updated app is used at once; the cache is only the offline fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {

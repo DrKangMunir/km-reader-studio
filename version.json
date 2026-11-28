@@ -1,0 +1,7 @@
+{
+  "version": "33.0",
+  "releaseTag": "v33.0.0",
+  "updatedAt": "2026-11-28",
+  "downloadUrl": "https://github.com/DrKangMunir/km-reader-studio/releases/latest",
+  "notes": "Fixed unescaped '&' in Windows .bat echo line ('Desktop & Start Menu' parsed as '& Start Menu') and verified full launch."
+}

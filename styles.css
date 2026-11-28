@@ -319,3 +319,15 @@ body.is-resizing-split canvas {
 .alt-remove { color: #fecaca; background: rgba(220, 38, 38, 0.25); border-color: rgba(248, 113, 113, 0.5); }
 .review-progress { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; color: #fcd34d; background: rgba(217, 119, 6, 0.12); border: 1px solid rgba(217, 119, 6, 0.4); }
 .review-progress.done { color: #6ee7b7; background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.45); }
+
+
+/* ==================== v26: CLICK-TO-ERASE SINGLE HIGHLIGHT MODE ==================== */
+body.tool-erase-active .annot-rect-hitarea,
+body.tool-erase-active .citation-pin-badge {
+  cursor: not-allowed !important;
+}
+
+body.tool-erase-active .annot-rect-hitarea:hover {
+  background: rgba(244, 63, 94, 0.28) !important;
+  box-shadow: 0 0 0 2px #f43f5e !important;
+}
