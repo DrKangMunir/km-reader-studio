@@ -833,11 +833,9 @@
       return;
     }
     if (store[sid]) pages[store[sid].pageNum] = 1;
-    row[fieldKey] = fe.ids.length
-      ? fe.ids.map(function (id, i) { return String(store[id].quote).trim() + ' [' + fe.badges[i] + ']'; }).join(' ')
-      : 'Not reported.';
     fe.verbatim = true;
     fe.status = 'checked';   // you chose this sentence yourself
+    resequencePaperCitations(paper, row);
     if (paper && KM.renderPageAnnotations) Object.keys(pages).forEach(function (pg) { KM.renderPageAnnotations(paper, parseInt(pg, 10)); });
     persistMatrixChange(paper, row);
     if (paper && KM.renderTabs) KM.renderTabs();
@@ -1192,6 +1190,454 @@
   }
 
   // Exports to KM namespace
+  
+  
+  // ==================== v26: CONTINUOUS [1]..[N] RESEQUENCING & SINGLE-HIGHLIGHT REMOVAL ====================
+  function resequencePaperCitations(paper, row) {
+    if (!row) return;
+    row.evidenceMap = row.evidenceMap || {};
+    row.fieldEvidence = row.fieldEvidence || {};
+    var store = row.sentenceStore || {};
+
+    var seq = 1;
+    var oldToNew = {};
+    var newEvidenceMap = {};
+    var touchedPages = {};
+
+    FIELD_ORDER.forEach(function (f) {
+      var fe = row.fieldEvidence[f];
+      if (!fe || !Array.isArray(fe.ids)) return;
+      var nextIds = [];
+      var nextBadges = [];
+
+      fe.ids.forEach(function (sid, idx) {
+        var entry = store[sid];
+        var oldB = fe.badges && fe.badges[idx];
+        var prevEv = (oldB != null && row.evidenceMap[String(oldB)]) ? row.evidenceMap[String(oldB)] : null;
+        if (!entry && !prevEv) return;
+
+        var newB = seq++;
+        if (oldB != null) oldToNew[String(oldB)] = newB;
+        nextIds.push(sid);
+        nextBadges.push(newB);
+
+        var pageNum = (entry && entry.pageNum) || (prevEv && prevEv.pageNum) || 1;
+        var quote = (entry && entry.quote) || (prevEv && prevEv.quote) || '';
+        var rects = (entry && entry.rects) || (prevEv && prevEv.rects) || [];
+        var category = (prevEv && prevEv.category) || COL_STYLE[FIELD_RULES[f].col];
+
+        newEvidenceMap[String(newB)] = {
+          pageNum: pageNum,
+          category: category,
+          sentenceId: sid,
+          quote: quote,
+          rects: rects
+        };
+        touchedPages[pageNum] = 1;
+      });
+
+      fe.ids = nextIds;
+      fe.badges = nextBadges;
+
+      if (fe.verbatim) {
+        row[f] = nextIds.length
+          ? nextIds.map(function (sid, i) {
+              var q = (store[sid] && store[sid].quote) || (newEvidenceMap[String(nextBadges[i])] && newEvidenceMap[String(nextBadges[i])].quote) || '';
+              return String(q).trim() + ' [' + nextBadges[i] + ']';
+            }).join(' ')
+          : 'Not reported.';
+      } else if (typeof row[f] === 'string') {
+        row[f] = row[f].replace(/\[(\d{1,3})\]/g, function (m, num) {
+          return oldToNew[num] ? ('[' + oldToNew[num] + ']') : '';
+        }).replace(/\s{2,}/g, ' ').trim();
+      }
+    });
+
+    row.evidenceMap = newEvidenceMap;
+    row.linkedCount = Object.keys(newEvidenceMap).length;
+
+    if (paper && Array.isArray(paper.highlights)) {
+      paper.highlights.forEach(function (h) {
+        if (h.pageNum) touchedPages[h.pageNum] = 1;
+        if (h.isAutoMatrix && h.citationNum != null) {
+          var mapped = oldToNew[String(h.citationNum)];
+          if (mapped) {
+            h.citationNum = mapped;
+          } else if (h.sentenceId) {
+            Object.keys(newEvidenceMap).forEach(function (k) {
+              if (newEvidenceMap[k].sentenceId === h.sentenceId) {
+                h.citationNum = Number(k);
+              }
+            });
+          }
+        }
+      });
+      if (KM.renderPageAnnotations) {
+        Object.keys(touchedPages).forEach(function (pg) {
+          KM.renderPageAnnotations(paper, parseInt(pg, 10));
+        });
+      }
+    }
+  }
+
+  KM.removeHighlightFromMatrix = function (paper, hl) {
+    if (!paper || !hl) return;
+    var row = paper.matrixRow || (KM.state.matrixRows || []).find(function (r) { return r.paperId === paper.id; });
+    var targetCite = hl.citationNum != null ? Number(hl.citationNum) : null;
+    var targetSid = hl.sentenceId ? String(hl.sentenceId).toUpperCase() : '';
+    var cleanQuote = String(hl.quote || '').replace(/\s+/g, ' ').trim();
+
+    if (row && row.fieldEvidence) {
+      FIELD_ORDER.forEach(function (f) {
+        var fe = row.fieldEvidence[f];
+        if (!fe || !Array.isArray(fe.ids)) return;
+        var keepIds = [];
+        var keepBadges = [];
+        var changed = false;
+
+        fe.ids.forEach(function (sid, i) {
+          var b = fe.badges && fe.badges[i];
+          var isMatch = (targetCite != null && b != null)
+            ? (Number(b) === targetCite)
+            : (targetSid && String(sid).toUpperCase() === targetSid);
+          if (isMatch) {
+            changed = true;
+            if (String(sid).startsWith('S') && (row.sentenceStore || {})[sid]) {
+              fe.candidates = [sid].concat((fe.candidates || []).filter(function (x) { return x !== sid; }));
+            }
+          } else {
+            keepIds.push(sid);
+            keepBadges.push(b);
+          }
+        });
+
+        if (changed) {
+          fe.ids = keepIds;
+          fe.badges = keepBadges;
+          if (!fe.verbatim && typeof row[f] === 'string' && cleanQuote) {
+            row[f] = row[f].replace(cleanQuote, '').replace(/\s{2,}/g, ' ').trim() || 'Not reported.';
+          }
+        }
+      });
+
+      resequencePaperCitations(paper, row);
+      paper.matrixRow = row;
+      if (KM.upsertMatrixRow) KM.upsertMatrixRow(row);
+    }
+
+    updateMatrixCountBadge();
+    renderMatrixTable();
+    if (KM.renderTabs) KM.renderTabs();
+    if (KM.renderPageAnnotations) KM.renderPageAnnotations(paper, hl.pageNum);
+    if (KM.saveWorkspaceToDb) KM.saveWorkspaceToDb();
+    KM.showToast('Deleted highlight & updated Matrix numbering.', 'info');
+  };
+
+  // ==================== v25: MANUAL SEMANTIC HIGHLIGHT -> MATRIX SYNC ====================
+  var CATEGORY_TO_MATRIX_FIELD = {
+    objective: 'problemObjective',
+    methodology: 'studyDesign',
+    finding: 'mainResults',
+    limitation: 'strengthsLimitations',
+    citation: 'connectionRelevance'
+  };
+
+  KM.syncManualHighlightToMatrix = function (paper, hl) {
+    if (!paper || !hl) return;
+    var fieldKey = CATEGORY_TO_MATRIX_FIELD[hl.category] || 'problemObjective';
+    var cleanQuote = String(hl.quote || '').replace(/\s+/g, ' ').trim();
+    if (!cleanQuote) return;
+
+    // 1. Ensure paper has a matrixRow (create a manual-ready row if Auto Matrix hasn't been run yet)
+    var row = paper.matrixRow || (KM.state.matrixRows || []).find(function (r) { return r.paperId === paper.id; });
+    if (!row) {
+      var reg = (paper.indexedCorpus && paper.indexedCorpus.sentenceRegistry) || {};
+      var meta = KM.parsePaperMeta ? KM.parsePaperMeta(paper, reg) : { authors: paper.title, title: paper.title };
+      var emptyFe = {};
+      FIELD_ORDER.forEach(function (f) {
+        emptyFe[f] = { ids: [], badges: [], candidates: [], status: 'auto', verbatim: true };
+      });
+      row = {
+        paperId: paper.id,
+        paperName: paper.title,
+        fileName: paper.fileName || (paper.title + '.pdf'),
+        authors: meta.authors,
+        title: meta.title,
+        journal: '',
+        doi: '',
+        linkedCount: 0,
+        unverifiedCount: 0,
+        extractionMode: 'manual + verbatim',
+        truncated: false,
+        evidenceMap: {},
+        fieldEvidence: emptyFe,
+        sentenceStore: {},
+        sectionsDetected: false,
+        mendeleyKey: String(paper.fileName || paper.title || '').replace(/\.pdf$/i, '').split(' - ')[0].trim(),
+        settingPopulation: 'Not reported.',
+        problemObjective: 'Not reported.',
+        theoreticalFramework: 'Not reported.',
+        studyDesign: 'Not reported.',
+        dataAnalysis: 'Not reported.',
+        mainResults: 'Not reported.',
+        conclusions: 'Not reported.',
+        strengthsLimitations: 'Not reported.',
+        connectionRelevance: 'Not reported.'
+      };
+    }
+
+    row.evidenceMap = row.evidenceMap || {};
+    row.fieldEvidence = row.fieldEvidence || {};
+    row.sentenceStore = row.sentenceStore || {};
+    if (!row.fieldEvidence[fieldKey]) {
+      row.fieldEvidence[fieldKey] = { ids: [], badges: [], candidates: [], status: 'auto', verbatim: true };
+    }
+
+    // 2. Allocate next sequential citation badge [n] across existing highlights & evidenceMap
+    var maxBadge = 0;
+    Object.keys(row.evidenceMap).forEach(function (k) {
+      var n = parseInt(k, 10);
+      if (n > maxBadge) maxBadge = n;
+    });
+    (paper.highlights || []).forEach(function (existing) {
+      var n = parseInt(existing.citationNum, 10);
+      if (n > maxBadge) maxBadge = n;
+    });
+    var badgeNum = maxBadge + 1;
+    var manualId = 'M_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+    hl.citationNum = badgeNum;
+    hl.sentenceId = manualId;
+    hl.isAutoMatrix = true;
+
+    row.sentenceStore[manualId] = {
+      pageNum: hl.pageNum,
+      quote: cleanQuote,
+      section: 'manual highlight',
+      cites: false,
+      rects: hl.rects || []
+    };
+
+    row.evidenceMap[String(badgeNum)] = {
+      pageNum: hl.pageNum,
+      category: hl.category,
+      sentenceId: manualId,
+      quote: cleanQuote,
+      rects: hl.rects || []
+    };
+
+    var fe = row.fieldEvidence[fieldKey];
+    // A cell you typed in by hand keeps your text: the new quote is appended, and the cell stays marked 'edited'
+    var wasEdited = fe.verbatim === false;
+    fe.ids.push(manualId);
+    fe.badges.push(badgeNum);
+    if (!wasEdited) {
+      fe.verbatim = true;
+      fe.status = 'checked';
+    }
+
+    var snippetWithBadge = cleanQuote + ' [' + badgeNum + ']';
+    var curVal = String(row[fieldKey] || '').trim();
+    if (!curVal || /^not (?:reported|found automatically)\.?$/i.test(curVal)) {
+      row[fieldKey] = snippetWithBadge;
+    } else {
+      row[fieldKey] = curVal + ' ' + snippetWithBadge;
+    }
+
+    resequencePaperCitations(paper, row);
+    paper.matrixRow = row;
+    paper.isDirty = true;
+
+    if (KM.upsertMatrixRow) KM.upsertMatrixRow(row);
+    updateMatrixCountBadge();
+    renderMatrixTable();
+    if (KM.renderTabs) KM.renderTabs();
+    if (KM.renderPageAnnotations) KM.renderPageAnnotations(paper, hl.pageNum);
+    if (KM.saveWorkspaceToDb) KM.saveWorkspaceToDb();
+
+    var catLabel = (KM.SEMANTIC_CATEGORIES[hl.category] && KM.SEMANTIC_CATEGORIES[hl.category].label) || hl.category;
+    var fieldLabel = FIELD_LABELS[fieldKey] || fieldKey;
+    KM.showToast('Added [' + hl.citationNum + '] (' + catLabel + ') to Matrix → ' + fieldLabel + '!', 'success');
+  };
+
+  
+  // ==================== v28: IN-APP AUTO-UPDATER (DESKTOP & WEB) ====================
+  function compareSemver(a, b) {
+    var pa = String(a || '0').replace(/^v/i, '').split('.').map(function (n) { return parseInt(n, 10) || 0; });
+    var pb = String(b || '0').replace(/^v/i, '').split('.').map(function (n) { return parseInt(n, 10) || 0; });
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var diff = (pa[i] || 0) - (pb[i] || 0);
+      if (diff !== 0) return diff;
+    }
+    return 0;
+  }
+
+  async function fetchRemoteVersionInfo() {
+    var ts = Date.now();
+    var urls = [
+      'https://drkangmunir.github.io/km-reader-studio/version.json?t=' + ts,
+      'https://raw.githubusercontent.com/DrKangMunir/km-reader-studio/main/version.json?t=' + ts,
+      'https://raw.githubusercontent.com/DrKangMunir/km-reader-studio/master/version.json?t=' + ts
+    ];
+    var lastStatus = 'Network error';
+    for (var i = 0; i < urls.length; i++) {
+      try {
+        var r = await fetch(urls[i], { cache: 'no-store' });
+        if (r.ok) {
+          var data = await r.json();
+          if (data && data.version) return data;
+        }
+        lastStatus = 'HTTP ' + r.status;
+      } catch (e) {
+        lastStatus = e.message || 'Offline';
+      }
+    }
+    throw new Error(lastStatus);
+  }
+
+  async function checkForAppUpdates(silent) {
+    var localVer = window.KM_APP_VERSION || '33.0';
+    var isDesktopFile = window.location.protocol === 'file:';
+    var subEl = KM.$('updateVersionSubtitle');
+    var titleEl = KM.$('updateStatusTitle');
+    var descEl = KM.$('updateStatusDesc');
+    var cardEl = KM.$('updateStatusCard');
+    var dotEl = KM.$('updateAvailableDot');
+    var lblEl = KM.$('updateBtnLabel');
+    var deskBox = KM.$('desktopAutoUpdateBox');
+    var webBox = KM.$('webAutoUpdateBox');
+
+    if (subEl) subEl.textContent = 'Installed Version: v' + localVer + (isDesktopFile ? ' (Desktop App)' : ' (Web App)');
+    if (!silent && titleEl && descEl) {
+      titleEl.textContent = 'Checking GitHub for updates...';
+      descEl.textContent = 'Fetching latest version info from DrKangMunir/km-reader-studio...';
+    }
+
+    try {
+      var remote = await fetchRemoteVersionInfo();
+      var remoteVer = String(remote.version || localVer).replace(/^v/i, '');
+      var hasNewer = compareSemver(remoteVer, localVer) > 0;
+
+      if (hasNewer) {
+        if (dotEl) dotEl.classList.remove('hidden');
+        if (lblEl) lblEl.textContent = 'Update (v' + remoteVer + ')';
+        if (cardEl) cardEl.className = 'p-3 rounded-xl bg-amber-500/15 border border-amber-500/45 space-y-1';
+        if (titleEl) titleEl.innerHTML = '<span class="text-amber-300">New Update Available: v' + KM.escapeHtml(remoteVer) + '</span>';
+        if (descEl) descEl.textContent = remote.notes || 'A newer version of KM-Reader Studio is ready to install.';
+        if (isDesktopFile) {
+          if (deskBox) deskBox.classList.remove('hidden');
+          if (webBox) webBox.classList.add('hidden');
+        } else {
+          if (webBox) webBox.classList.remove('hidden');
+          if (deskBox) deskBox.classList.add('hidden');
+        }
+        if (silent) {
+          KM.showToast('Update v' + remoteVer + ' is available! Click "Update" in the top bar.', 'info');
+        }
+      } else {
+        if (dotEl) dotEl.classList.add('hidden');
+        if (lblEl) lblEl.textContent = 'Update';
+        if (cardEl) cardEl.className = 'p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/35 space-y-1';
+        if (titleEl) titleEl.innerHTML = '<span class="text-emerald-300">✓ You are on the latest version (v' + KM.escapeHtml(localVer) + ')</span>';
+        if (descEl) descEl.textContent = remote.notes || 'All features and bug fixes are up to date.';
+        if (isDesktopFile && deskBox) deskBox.classList.remove('hidden');
+        if (!isDesktopFile && webBox) webBox.classList.add('hidden');
+      }
+    } catch (err) {
+      if (!silent) {
+        if (cardEl) cardEl.className = 'p-3 rounded-xl bg-[#121216] border border-zinc-800 space-y-1';
+        if (titleEl) titleEl.textContent = 'Could not reach version.json on GitHub (' + err.message + ')';
+        if (descEl) descEl.textContent = 'Make sure version.json is uploaded to your GitHub repository root, or click "Auto-Update Desktop App Now" below to pull the latest files directly.';
+        if (isDesktopFile && deskBox) deskBox.classList.remove('hidden');
+      }
+    }
+  }
+
+  async function runDesktopAutoUpdate() {
+    var btn = KM.$('runDesktopAutoUpdateBtn');
+    var origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ph-bold ph-spinner animate-spin"></i><span>Downloading Latest App Files...</span>';
+    }
+
+    try {
+      var base = 'https://raw.githubusercontent.com/DrKangMunir/km-reader-studio/main';
+      var files = [
+        'index.html',
+        'styles.css',
+        'manifest.json',
+        'sw.js',
+        'version.json',
+        'js/security-lock.js',
+        'js/installers.js',
+        'js/pdf-engine.js',
+        'js/matrix-ai.js'
+      ];
+
+      var fetched = {};
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        var r = await fetch(base + '/' + f + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) throw new Error('Failed to fetch ' + f + ' (HTTP ' + r.status + ')');
+        fetched[f] = await r.text();
+      }
+
+      // If browser supports Directory Picker (Edge / Chrome Desktop), let user select their KM-Reader-Studio folder once and overwrite all files directly!
+      if (window.showDirectoryPicker) {
+        try {
+          KM.showToast('Select your KM-Reader-Studio folder (AppData\Local\KM-Reader-Studio) to overwrite & update...', 'info');
+          var dirHandle = await window.showDirectoryPicker({ id: 'km_app_install_dir', mode: 'readwrite' });
+          var jsDirHandle = await dirHandle.getDirectoryHandle('js', { create: true });
+
+          for (var k = 0; k < files.length; k++) {
+            var relPath = files[k];
+            var targetDir = relPath.indexOf('js/') === 0 ? jsDirHandle : dirHandle;
+            var fileName = relPath.replace(/^js\//, '');
+            var fh = await targetDir.getFileHandle(fileName, { create: true });
+            var writable = await fh.createWritable();
+            await writable.write(fetched[relPath]);
+            await writable.close();
+          }
+
+          KM.showToast('Desktop app updated directly! Reloading new version...', 'success');
+          setTimeout(function () { window.location.reload(); }, 900);
+          return;
+        } catch (dirErr) {
+          if (dirErr && dirErr.name === 'AbortError') return;
+        }
+      }
+
+      // Fallback: download a self-running 1-click updater .bat that updates %LOCALAPPDATA%\KM-Reader-Studio and relaunches automatically
+      var oneClickBat = [
+        '@echo off',
+        'title Updating KM-Reader Studio...',
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
+          "$dir = Join-Path $env:LOCALAPPDATA 'KM-Reader-Studio'; " +
+          "$jsDir = Join-Path $dir 'js'; " +
+          "if (-not (Test-Path $jsDir)) { New-Item -ItemType Directory -Path $jsDir -Force | Out-Null }; " +
+          "$base = 'https://raw.githubusercontent.com/DrKangMunir/km-reader-studio/main'; " +
+          "$files = @('index.html','styles.css','manifest.json','sw.js','version.json','js/security-lock.js','js/installers.js','js/pdf-engine.js','js/matrix-ai.js'); " +
+          "foreach ($f in $files) { Invoke-WebRequest -Uri ($base + '/' + $f + '?t=' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -OutFile (Join-Path $dir ($f -replace '/','\\')) -UseBasicParsing }; " +
+          "$uri = ([System.Uri](Join-Path $dir 'index.html')).AbsoluteUri; " +
+          "$b = @(\"$env:ProgramFiles(x86)\\Microsoft\\Edge\\Application\\msedge.exe\",\"$env:ProgramFiles\\Microsoft\\Edge\\Application\\msedge.exe\",\"$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe\") | Where-Object { Test-Path $_ } | Select-Object -First 1; " +
+          "if ($b) { Start-Process -FilePath $b -ArgumentList ('--app=' + $uri) } else { Start-Process -FilePath (Join-Path $dir 'index.html') }" +
+        '"',
+        'exit /b 0'
+      ].join('\r\n');
+
+      KM.downloadBlobFile('Update-KM-Reader-Studio.bat', oneClickBat, 'application/bat');
+      KM.showToast('Downloaded Update-KM-Reader-Studio.bat — double-click it to finish updating & relaunch!', 'success');
+    } catch (err) {
+      KM.showToast('Auto-update error: ' + err.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    }
+  }
+
   KM.updateApiStatusUi = updateApiStatusUi;
   KM.buildDeterministicMatrixFromCorpus = buildDeterministicMatrixFromCorpus;
   KM.callGeminiAPI = callGeminiAPI;
@@ -1360,7 +1806,7 @@
       }
     });
 
-    KM.on('exportMatrixJsonBtn', 'click', function () {
+    KM.on('exportMatrixJsonBtn', 'click', async function () {
       var rows = KM.state.matrixRows || [];
       if (!rows.length) {
         KM.showToast('No matrix rows to save.', 'error');
@@ -1375,8 +1821,10 @@
           return Object.assign({ mendeleyKey: r.mendeleyKey || String(r.fileName || '').replace(/\.pdf$/i, '').split(' - ')[0].trim() }, r);
         })
       };
-      KM.downloadBlobFile('KM-Reader-Matrix-Archive.json', JSON.stringify(bundle, null, 2), 'application/json;charset=utf-8');
-      KM.showToast('Saved portable Matrix JSON (' + rows.length + ' studies)!', 'success');
+      var res = await KM.downloadBlobFile('KM-Reader-Matrix-Archive.json', JSON.stringify(bundle, null, 2), 'application/json;charset=utf-8');
+      if (res && res.saved) {
+        KM.showToast('Saved "' + (res.name || 'KM-Reader-Matrix-Archive.json') + '" (' + rows.length + ' studies)!', 'success');
+      }
     });
 
     async function processImportedMatrixFile(file) {
@@ -1503,7 +1951,7 @@
       KM.showToast('Cleared all rows from Literature Matrix.', 'success');
     });
 
-    KM.on('exportMatrixCsvBtn', 'click', function () {
+    KM.on('exportMatrixCsvBtn', 'click', async function () {
       var rows = KM.state.matrixRows || [];
       if (!rows.length) {
         KM.showToast('No matrix rows to export.', 'error');
@@ -1523,10 +1971,14 @@
         });
         lines.push(vals.join(','));
       });
-      KM.downloadBlobFile('KM-Reader-Literature-Matrix.csv', lines.join('\r\n'), 'text/csv;charset=utf-8');
+      var csvBom = '\uFEFF' + lines.join('\r\n');
+      var res = await KM.downloadBlobFile('KM-Reader-Literature-Matrix.csv', csvBom, 'text/csv;charset=utf-8');
+      if (res && res.saved) {
+        KM.showToast('Saved "' + (res.name || 'KM-Reader-Literature-Matrix.csv') + '"!', 'success');
+      }
     });
 
-    KM.on('exportMatrixBibBtn', 'click', function () {
+    KM.on('exportMatrixBibBtn', 'click', async function () {
       var rows = KM.state.matrixRows || [];
       if (!rows.length) {
         KM.showToast('No matrix rows to export.', 'error');
@@ -1550,8 +2002,10 @@
         return '@article{' + citeKey + ',\n' + fields.join(',\n') + '\n}';
       });
 
-      KM.downloadBlobFile('KM-Reader-References.bib', entries.join('\n\n'), 'application/x-bibtex;charset=utf-8');
-      KM.showToast('Exported ' + rows.length + ' citation(s) to BibTeX!', 'success');
+      var res = await KM.downloadBlobFile('KM-Reader-References.bib', entries.join('\n\n'), 'application/x-bibtex;charset=utf-8');
+      if (res && res.saved) {
+        KM.showToast('Saved "' + (res.name || 'KM-Reader-References.bib') + '" (' + rows.length + ' citations)!', 'success');
+      }
     });
 
     KM.on('exportMatrixPdfBtn', 'click', async function () {
@@ -1837,8 +2291,10 @@
         }
 
         var pdfBytes = await pdfDoc.save();
-        KM.downloadBlobFile('KM-Reader-Literature-Matrix.pdf', new Blob([pdfBytes], { type: 'application/pdf' }));
-        KM.showToast('Exported Landscape PDF Matrix (' + rows.length + ' studies)!', 'success');
+        var res = await KM.downloadBlobFile('KM-Reader-Literature-Matrix.pdf', new Blob([pdfBytes], { type: 'application/pdf' }));
+        if (res && res.saved) {
+          KM.showToast('Saved "' + (res.name || 'KM-Reader-Literature-Matrix.pdf') + '" (' + rows.length + ' studies)!', 'success');
+        }
       } catch (err) {
         console.error('PDF Matrix export error:', err);
         KM.showToast('PDF export error: ' + err.message, 'error');
@@ -1923,6 +2379,35 @@
       closeApiSettingsModal();
       KM.showToast('Saved Gemini settings (' + KM.state.model + ')', 'success');
     });
+
+    // v28: In-App Update Button & Modal Handlers
+    KM.on('checkUpdateBtn', 'click', function () {
+      var m = KM.$('appUpdateModal');
+      if (m) { m.classList.remove('hidden'); m.style.display = 'flex'; }
+      checkForAppUpdates(false);
+    });
+    KM.on('closeUpdateModalBtn', 'click', function () {
+      var m = KM.$('appUpdateModal');
+      if (m) { m.classList.add('hidden'); m.style.display = ''; }
+    });
+    KM.on('recheckUpdateNowBtn', 'click', function () { checkForAppUpdates(false); });
+    KM.on('runDesktopAutoUpdateBtn', 'click', runDesktopAutoUpdate);
+    KM.on('runWebReloadUpdateBtn', 'click', async function () {
+      try {
+        if ('caches' in window) {
+          var keys = await caches.keys();
+          await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        }
+        if ('serviceWorker' in navigator) {
+          var regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }
+      } catch (e) {}
+      window.location.reload(true);
+    });
+
+    // Silently check for newer GitHub release 3 seconds after startup
+    setTimeout(function () { checkForAppUpdates(true); }, 3000);
 
     // Delegated Click Handler for [1]-[10] Citation Badges in Matrix Modal & AI Chat
     document.addEventListener('click', function (e) {

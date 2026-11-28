@@ -40,8 +40,35 @@
     }, 5200);
   };
 
-  KM.downloadBlobFile = function (filename, content, mime) {
+  KM.downloadBlobFile = async function (filename, content, mime) {
     var blob = content instanceof Blob ? content : new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
+    if (window.showSaveFilePicker) {
+      try {
+        var extMatch = String(filename || '').match(/(\.[a-z0-9]+)$/i);
+        var ext = extMatch ? extMatch[1].toLowerCase() : '.txt';
+        var typeMap = {
+          '.pdf':  { description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } },
+          '.json': { description: 'JSON Archive', accept: { 'application/json': ['.json'] } },
+          '.csv':  { description: 'CSV Spreadsheet (Excel)', accept: { 'text/csv': ['.csv'] } },
+          '.bib':  { description: 'BibTeX References', accept: { 'application/x-bibtex': ['.bib'] } },
+          '.bat':  { description: 'Windows Batch Script', accept: { 'application/bat': ['.bat'] } }
+        };
+        var fileType = typeMap[ext] || { description: 'File', accept: { 'application/octet-stream': [ext] } };
+        var handle = await window.showSaveFilePicker({
+          id: 'km_exports',
+          suggestedName: filename,
+          types: [fileType]
+        });
+        var writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return { saved: true, name: handle.name };
+      } catch (err) {
+        if (err && err.name === 'AbortError') {
+          return { saved: false, aborted: true };
+        }
+      }
+    }
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
@@ -50,6 +77,7 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    return { saved: true, name: filename };
   };
 
   KM.SEMANTIC_CATEGORIES = {
@@ -549,6 +577,10 @@
         hit.title = catMeta.label + ': ' + hl.quote;
         hit.addEventListener('click', function (e) {
           e.stopPropagation();
+          if (KM.state.activeTool === 'erase') {
+            deleteSingleHighlight(paper, hl.id);
+            return;
+          }
           syncQuoteToAiBanner(hl.pageNum, hl.quote);
         });
         overlay.appendChild(hit);
@@ -561,9 +593,13 @@
           pin.style.top = (r.yPct * 100) + '%';
           pin.style.backgroundColor = catMeta.pinBg;
           pin.textContent = '[' + hl.citationNum + ']';
-          pin.title = catMeta.label + ' — Click to inspect passage';
+          pin.title = catMeta.label + ' — Click to inspect passage (or click with Eraser tool to delete)';
           pin.addEventListener('click', function (e) {
             e.stopPropagation();
+            if (KM.state.activeTool === 'erase') {
+              deleteSingleHighlight(paper, hl.id);
+              return;
+            }
             syncQuoteToAiBanner(hl.pageNum, hl.quote);
           });
           overlay.appendChild(pin);
@@ -637,11 +673,33 @@
     }
   });
 
+    function deleteSingleHighlight(paper, highlightId) {
+    if (!paper || !highlightId) return;
+    var target = null;
+    paper.highlights = (paper.highlights || []).filter(function (h) {
+      if (h.id === highlightId) {
+        target = h;
+        return false;
+      }
+      return true;
+    });
+    if (!target) return;
+    paper.isDirty = true;
+    if (KM.removeHighlightFromMatrix) {
+      KM.removeHighlightFromMatrix(paper, target);
+    } else {
+      renderTabs();
+      renderPageAnnotations(paper, target.pageNum);
+      KM.saveWorkspaceToDb();
+      KM.showToast('Deleted highlight.', 'info');
+    }
+  }
+
   function applyHighlightFromSelection(catKey) {
     var paper = KM.getActivePaper();
     if (!paper || !KM.state.pendingSelection) return;
     var cat = KM.SEMANTIC_CATEGORIES[catKey] ? catKey : 'objective';
-    paper.highlights.push({
+    var hl = {
       id: 'hl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
       pageNum: KM.state.pendingSelection.pageNum,
       category: cat,
@@ -649,12 +707,17 @@
       isAutoMatrix: false,
       quote: KM.state.pendingSelection.quote,
       rects: KM.state.pendingSelection.rects
-    });
+    };
+    paper.highlights.push(hl);
     paper.isDirty = true;
-    renderTabs();
-    renderPageAnnotations(paper, KM.state.pendingSelection.pageNum);
-    KM.saveWorkspaceToDb();
-    KM.showToast('Highlighted as ' + KM.SEMANTIC_CATEGORIES[cat].label, 'success');
+    if (KM.syncManualHighlightToMatrix) {
+      KM.syncManualHighlightToMatrix(paper, hl);
+    } else {
+      renderTabs();
+      renderPageAnnotations(paper, hl.pageNum);
+      KM.saveWorkspaceToDb();
+      KM.showToast('Highlighted as ' + KM.SEMANTIC_CATEGORIES[cat].label, 'success');
+    }
   }
 
   // ==================== INDEXED SENTENCE ANCHORING ([S001]..[S999]) ====================
@@ -1288,58 +1351,48 @@
     return await pdfDoc.save();
   }
 
-  async function executePdfSave(mode) {
+  async function executePdfSave() {
     var paper = KM.getActivePaper();
-    if (!paper || !window.PDFLib) return;
-
-    var modal = KM.$('savePdfOptionsModal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.style.display = '';
-    }
+    if (!paper || !window.PDFLib) return false;
 
     try {
       var outBytes = await buildAnnotatedPdfBytes(paper);
+      var defaultName = paper.fileName || (paper.title + '.pdf');
 
-      if (mode === 'overwrite' && paper.fileHandle) {
-        var perm = await paper.fileHandle.requestPermission({ mode: 'readwrite' });
-        if (perm !== 'granted') {
-          KM.showToast('Write permission denied by browser.', 'error');
-          return;
+      if (window.showSaveFilePicker) {
+        var pickerOpts = {
+          id: 'km_academic_pdfs',
+          suggestedName: defaultName,
+          types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
+        };
+        if (paper.fileHandle) {
+          pickerOpts.startIn = paper.fileHandle;
+        } else if (KM.lastPdfDirHandle) {
+          pickerOpts.startIn = KM.lastPdfDirHandle;
         }
-        var writable = await paper.fileHandle.createWritable();
+        var saveHandle = await window.showSaveFilePicker(pickerOpts);
+        var writable = await saveHandle.createWritable();
         await writable.write(outBytes);
         await writable.close();
+        paper.fileHandle = saveHandle;
+        paper.fileName = saveHandle.name;
         paper.rawBytes = outBytes.buffer.slice(0);
         paper.isDirty = false;
         renderTabs();
         KM.saveWorkspaceToDb();
-        KM.showToast('Overwrote original "' + paper.fileName + '"!', 'success');
-        return true;
-      }
-
-      if (window.showSaveFilePicker) {
-        var saveHandle = await window.showSaveFilePicker({
-          suggestedName: paper.title + '_KM_Annotated.pdf',
-          types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
-        });
-        var newWritable = await saveHandle.createWritable();
-        await newWritable.write(outBytes);
-        await newWritable.close();
-        paper.isDirty = false;
-        renderTabs();
-        KM.showToast('Saved new copy "' + saveHandle.name + '"!', 'success');
+        KM.showToast('Saved "' + saveHandle.name + '"!', 'success');
         return true;
       } else {
-        KM.downloadBlobFile(paper.title + '_KM_Annotated.pdf', new Blob([outBytes], { type: 'application/pdf' }));
+        await KM.downloadBlobFile(defaultName, new Blob([outBytes], { type: 'application/pdf' }));
         paper.isDirty = false;
         renderTabs();
-        KM.showToast('Downloaded "' + paper.title + '_KM_Annotated.pdf"', 'success');
+        KM.showToast('Downloaded "' + defaultName + '"', 'success');
         return true;
       }
     } catch (err) {
-      if (err && err.name === 'AbortError') return;
+      if (err && err.name === 'AbortError') return false;
       KM.showToast('Save PDF failed: ' + err.message, 'error');
+      return false;
     }
   }
 
@@ -1353,16 +1406,7 @@
       KM.showToast('PDF export engine is loading, please retry.', 'error');
       return;
     }
-
-    if (paper.fileHandle) {
-      var modal = KM.$('savePdfOptionsModal');
-      if (modal) {
-        modal.classList.remove('hidden');
-        modal.style.display = 'flex';
-        return;
-      }
-    }
-    await executePdfSave('new');
+    await executePdfSave();
   }
 
   // ==================== INLINE PDF SEARCH ====================
@@ -1426,10 +1470,15 @@
 
   function setDockTool(tool) {
     KM.state.activeTool = tool;
+    if (document.body) {
+      if (tool === 'erase') document.body.classList.add('tool-erase-active');
+      else document.body.classList.remove('tool-erase-active');
+    }
     document.querySelectorAll('.dock-tool-btn').forEach(function (btn) {
       var active = btn.dataset.tool === tool;
+      var activeStyle = tool === 'erase' ? 'bg-rose-600 text-white' : 'bg-indigo-600 text-white';
       btn.className = 'dock-tool-btn w-9 h-9 rounded-xl flex items-center justify-center transition relative cursor-pointer ' +
-        (active ? 'bg-indigo-600 text-white' : 'text-zinc-300 hover:bg-zinc-800');
+        (active ? activeStyle : 'text-zinc-300 hover:bg-zinc-800');
     });
   }
 
@@ -1503,12 +1552,7 @@
       e.target.value = '';
     });
 
-    KM.on('closeSavePdfModalBtn', 'click', function () {
-      var m = KM.$('savePdfOptionsModal');
-      if (m) { m.classList.add('hidden'); m.style.display = ''; }
-    });
-    KM.on('confirmOverwriteOriginalBtn', 'click', function () { executePdfSave('overwrite'); });
-    KM.on('confirmSaveNewCopyBtn', 'click', function () { executePdfSave('new'); });
+
 
     KM.on('pdfSearchInput', 'input', runPdfSearch);
     KM.on('searchNextBtn', 'click', function () { jumpSearchMatch(KM.state.searchIndex + 1); });
@@ -1540,6 +1584,8 @@
         setDockTool(btn.dataset.tool || 'select');
         if (btn.dataset.tool === 'note') {
           KM.showToast('Click anywhere on a PDF page to drop a margin note.', 'info');
+        } else if (btn.dataset.tool === 'erase') {
+          KM.showToast('Eraser active: click any highlight on the PDF to delete it & remove it from Matrix.', 'info');
         }
       });
     });
@@ -1558,17 +1604,7 @@
       });
     });
 
-    KM.on('clearPageHighlightsBtn', 'click', function () {
-      var paper = KM.getActivePaper();
-      if (!paper) return;
-      var curPage = parseInt((KM.$('currentPageLabel') && KM.$('currentPageLabel').textContent) || '1', 10) || 1;
-      paper.highlights = paper.highlights.filter(function (h) { return h.pageNum !== curPage; });
-      paper.isDirty = true;
-      renderTabs();
-      renderPageAnnotations(paper, curPage);
-      KM.saveWorkspaceToDb();
-      KM.showToast('Cleared highlights on Page ' + curPage, 'info');
-    });
+
 
     KM.on('zoomInBtn', 'click', function () {
       KM.state.scale = Math.min(2.5, Number((KM.state.scale + 0.15).toFixed(2)));
